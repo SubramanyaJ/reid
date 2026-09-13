@@ -1,0 +1,8 @@
+{
+  "frames": [
+    {"camera": "C1", "timestamp": 0.0, "image": "frames/background000.png", "warmup": true, "objects": []},
+    {"camera": "C1", "timestamp": 3.95, "image": "frames/background079.png", "warmup": true, "objects": []},
+    {"camera": "C1", "timestamp": 4.0, "image": "frames/frame080.png", "mask": "masks/frame080.png", "objects": [{"identity": "vehicle01", "bbox": [100, 120, 150, 90]}]},
+    {"camera": "C1", "timestamp": 4.05, "image": "frames/frame081.png", "mask": "masks/frame081.png", "objects": [{"identity": "vehicle01", "bbox": [103, 120, 150, 90]}]}
+  ]
+}

@@ -13,9 +13,10 @@ DEFAULTS = {
     "detection": {"method": "MOG2", "history": 500, "variance_threshold": 24,
                   "min_component_fraction": .0008, "min_core_radius_fraction": .015,
                   "max_hole_fraction": .001, "grabcut": False},
-    "tracking": {"min_hits": 6, "max_missed": 14, "min_vehicle_fraction": .006,
-                 "max_vehicle_fraction": .65, "min_width_fraction": .055, "min_height_fraction": .09,
-                 "min_foreground_fraction": .003, "min_fill_ratio": .25,
+    "tracking": {"min_hits": 6, "max_missed": 14, "min_vehicle_fraction": .008,
+                 "max_vehicle_fraction": .40, "min_width_fraction": .065, "min_height_fraction": .10,
+                 "max_width_fraction": .80, "max_height_fraction": .85,
+                 "min_foreground_fraction": .004, "min_fill_ratio": .30,
                  "min_aspect_ratio": .4, "max_aspect_ratio": 3.5, "min_motion_consistency": .4},
     "features": {"weights": {"color": 1., "texture": .65, "structure": .7, "statistics": .4},
                  "local_verifier": "ORB"},
@@ -64,7 +65,8 @@ def load_config(path):
     for section, names in {
         "detection": ["min_component_fraction", "min_core_radius_fraction", "max_hole_fraction"],
         "tracking": ["min_vehicle_fraction", "max_vehicle_fraction", "min_width_fraction", "min_height_fraction",
-                     "min_foreground_fraction", "min_fill_ratio", "min_motion_consistency"],
+                     "max_width_fraction", "max_height_fraction", "min_foreground_fraction",
+                     "min_fill_ratio", "min_motion_consistency"],
     }.items():
         for name in names:
             value = cfg[section][name]
@@ -74,6 +76,9 @@ def load_config(path):
         raise ValueError("Invalid tracking aspect ratio range")
     if cfg["tracking"]["min_vehicle_fraction"] >= cfg["tracking"]["max_vehicle_fraction"]:
         raise ValueError("Minimum object area must be smaller than maximum object area")
+    for dimension in ("width", "height"):
+        if cfg["tracking"][f"min_{dimension}_fraction"] >= cfg["tracking"][f"max_{dimension}_fraction"]:
+            raise ValueError(f"Minimum object {dimension} must be smaller than maximum object {dimension}")
     for key, low, high in [("thumbnail_limit", 1, 5000), ("thumbnail_size", 64, 512)]:
         value = cfg["visualization"][key]
         if type(value) is not int or not low <= value <= high:

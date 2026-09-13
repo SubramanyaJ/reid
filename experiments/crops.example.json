@@ -1,0 +1,10 @@
+{
+  "gallery": [
+    {"image": "crops/vehicle01_cam1.png", "mask": "masks/vehicle01_cam1.png", "identity": "vehicle01", "camera": "C1", "sample_id": "sessionA-C1-001"},
+    {"image": "crops/vehicle02_cam1.png", "identity": "vehicle02", "camera": "C1", "sample_id": "sessionA-C1-002"}
+  ],
+  "queries": [
+    {"image": "crops/vehicle01_cam2.png", "mask": "masks/vehicle01_cam2.png", "identity": "vehicle01", "camera": "C2", "sample_id": "sessionB-C2-001"},
+    {"image": "crops/unknown_cam2.png", "identity": "vehicle03", "camera": "C2", "sample_id": "sessionB-C2-003"}
+  ]
+}

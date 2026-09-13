@@ -60,8 +60,8 @@ class Tracker:
         # Perspective only makes the area requirement slightly stricter near the bottom.
         relative_y = float(np.clip((y + h) / height, 0, 1))
         minimum = self.cfg["min_vehicle_fraction"] * (1 + .25 * relative_y)
-        return (w / width >= self.cfg["min_width_fraction"] and
-                h / height >= self.cfg["min_height_fraction"] and
+        return (self.cfg["min_width_fraction"] <= w / width <= self.cfg.get("max_width_fraction", .80) and
+                self.cfg["min_height_fraction"] <= h / height <= self.cfg.get("max_height_fraction", .85) and
                 minimum <= fraction <= self.cfg["max_vehicle_fraction"] and
                 foreground_area / (width * height) >= self.cfg["min_foreground_fraction"] and
                 foreground_area / (w * h) >= self.cfg["min_fill_ratio"] and

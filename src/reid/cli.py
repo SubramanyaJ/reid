@@ -64,6 +64,20 @@ def main():
     evaluate = commands.add_parser("evaluate")
     evaluate.add_argument("--csv", required=True)
     evaluate.add_argument("--out", default="experiments/results/evaluation.json")
+    metrics = commands.add_parser("metrics", help="Offline visual research suite; writes metrics.json without starting nodes")
+    metrics.add_argument("--out", default="experiments/results/research")
+    inputs = metrics.add_mutually_exclusive_group()
+    inputs.add_argument("--dataset", help="Held-out descriptor NPZ")
+    inputs.add_argument("--crops", help="Labeled gallery/query image manifest JSON")
+    metrics.add_argument("--frames-manifest", help="Labeled frame replay JSON; otherwise uses synthetic motion")
+    metrics.add_argument("--cross-camera", action="store_true", help="Exclude all same-camera gallery entries")
+    metrics.add_argument("--sizes", nargs="+", type=int, default=[100, 1000, 5000, 10000])
+    metrics.add_argument("--queries", type=int, default=100)
+    metrics.add_argument("--identities", type=int, default=64, help="Synthetic crop identities, with three gallery views each")
+    metrics.add_argument("--seeds", nargs="+", type=int, default=[17, 29, 43], help="Independent hyperplane seeds")
+    metrics.add_argument("--data-seed", type=int, default=2026)
+    metrics.add_argument("--repeats", type=int, default=5)
+    metrics.add_argument("--skip-vision", action="store_true")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     try:
@@ -103,6 +117,18 @@ def main():
         elif args.command == "evaluate":
             from .metrics.evaluate import evaluate
             evaluate(args.csv, args.out)
+        elif args.command == "metrics":
+            if args.queries < 1 or args.repeats < 1 or args.identities < 2 or any(size < 5 for size in args.sizes):
+                raise ValueError("Use positive queries/repeats, identities >=2 and sizes >=5")
+            if args.data_seed < 0 or args.data_seed > 2147483647 or any(seed < 0 for seed in args.seeds):
+                raise ValueError("Seeds must be nonnegative; data seed must fit a signed 32-bit integer")
+            if args.cross_camera and not (args.dataset or args.crops):
+                raise ValueError("--cross-camera needs supplied data with camera identifiers")
+            # CLI imports no NumPy before this branch. Pin BLAS before loading its runtime.
+            for variable in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "BLIS_NUM_THREADS"):
+                os.environ[variable] = "1"
+            from .metrics.research import research
+            research(args)
     except (ValueError, OSError) as error:
         parser.exit(2, f"Error: {error}\n")
 

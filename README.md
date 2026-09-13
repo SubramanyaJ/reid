@@ -51,7 +51,7 @@ The implementation separates these responsibilities:
 | `network` | HTTP endpoints, transaction gossip, verified catch-up |
 | `storage` | Separate operational, identity, and committed-ledger SQLite tables |
 | `visualization` | Local monitor HTML/CSS/JavaScript |
-| `metrics` | Synthetic scenes, retrieval benchmark, pairwise Re-ID evaluation |
+| `metrics` | Reproducible offline research suite, labeled frame/crop replay, LSH comparison, pairwise evaluation |
 
 `runtime.py` wires the subsystems together. `cli.py` contains actual project entry points. `tests/` covers the independent components and ledger lifecycle. `experiments/` contains an evaluation CSV example; generated results default to `experiments/results/`.
 
@@ -242,7 +242,7 @@ Observation quality combines relative crop size, Laplacian sharpness, mask occup
 
 ### Whole-object filtering for the hand demonstration
 
-The LAN deployment uses the following tighter settings on C1 and C2. The source camera indices remain C1=`1`, C2=`0`; C3 remains camera-less. Existing configs explicitly override defaults, so changing Python defaults alone does not retune a previously generated YAML. Update each active YAML on its own host and restart that node when tuning.
+The following are the research revision's tighter settings. They are applied to the default template and local C1 configuration. Remote hosts have not been changed or started. The source camera indices remain C1=`1`, C2=`0`; C3 remains camera-less. Existing configs explicitly override defaults, so changing Python defaults alone does not retune a previously generated YAML. Apply these settings on each other host when you next deploy there.
 
 ```yaml
 detection:
@@ -252,12 +252,14 @@ detection:
   grabcut: true
 tracking:
   min_hits: 6
-  min_vehicle_fraction: 0.006
-  max_vehicle_fraction: 0.65
-  min_width_fraction: 0.055
-  min_height_fraction: 0.09
-  min_foreground_fraction: 0.003
-  min_fill_ratio: 0.25
+  min_vehicle_fraction: 0.008
+  max_vehicle_fraction: 0.40
+  min_width_fraction: 0.065
+  min_height_fraction: 0.10
+  max_width_fraction: 0.80
+  max_height_fraction: 0.85
+  min_foreground_fraction: 0.004
+  min_fill_ratio: 0.30
   min_aspect_ratio: 0.4
   max_aspect_ratio: 3.5
   min_motion_consistency: 0.4
@@ -266,7 +268,7 @@ visualization:
   thumbnail_size: 240
 ```
 
-At 960×540, a candidate needs a bbox at least about **53 pixels wide and 49 pixels high**, bbox area at least **3,110–3,888 pixels** depending on vertical location, at least **1,555 foreground pixels**, and at least 25% bbox occupancy. The interior-core radius must reach about **8 pixels**. These requirements work together; satisfying width alone is insufficient. A whole hand with a connected palm can pass, while a thin isolated finger should fail. Raising the three minimum size/area fractions suppresses smaller objects; lowering them permits more distant objects but risks returning to finger/noise tracks. The `min_vehicle_fraction` name is retained for YAML compatibility and now acts as a hard whole-object area floor.
+At 960×540, an integer bbox must be at least **63 pixels wide and 54 pixels high**, with area at least **4,148–5,184 pixels** depending on vertical location, at least **2,074 foreground pixels**, and at least 30% bbox occupancy. Maximum width is **768 pixels**, maximum height **459 pixels**, and maximum area **207,360 pixels** (40% of the frame). All limits apply together. The interior-core radius remains about **8 pixels**. A whole hand with a connected palm can pass, while a thin isolated finger should fail. Larger floors reject more distant objects as well as fragments; tighter ceilings reject close objects as well as oversized blobs. The `min_vehicle_fraction` name is retained for YAML compatibility and acts as a hard whole-object area floor.
 
 Candidate crops use only the associated connected component's mask, not every foreground pixel inside its bounding box. Optional GrabCut runs only after a stable candidate exists, with the existing fallback rules. The live overlay draws the selected component contour in cyan within the track bbox. DETECTION now counts geometry-qualified candidate regions; RAW REGIONS shows the earlier segmentation count. Lost tracks can coast briefly after an object disappears.
 
@@ -547,3 +549,19 @@ The following are material constraints of the actual implementation:
 - **Storage and transport:** event/sidecar archives grow; state scans are simple cyclic pagination; HTTP status/features/previews need external access control in a shared network. One peer process has one camera thread. Backend read buffering and CPU-heavy template matching can reduce achieved FPS.
 
 Future classical work can improve motion-aware fragment handling, multi-hypothesis association, automatic scene-scale envelopes, hand-designed illumination normalization, richer manually authored regional glyph sets, robust local geometric verification, adaptive descriptor diversity selection, and calibrated evidence thresholds using held-out evaluation. Distributed work can add authenticated transport, off-ledger availability acknowledgments, retention/checkpoints, explicit identity merge/retraction events, and a properly specified crash-tolerant view-change protocol with corresponding safety/liveness tests. Any such extension should preserve the separation between physical identification evidence and provenance agreement.
+
+
+## 15. Paper and reproducible visual metrics
+
+The visual-method paper is in [`paper.org`](paper.org). It contains 15 recent research papers, 11 supporting references, 24 explained equations, and measured local results. It focuses on foreground support, bounding, masked descriptors, hashing, and retrieval. The reference attachment contained only a cropped evaluation subsection; the matching visible hierarchy and the reconstructed conventional main headings are identified in an Org comment.
+
+Run the extended suite without starting any camera or node:
+
+```powershell
+Set-Location E:\home\gitthings\reid
+.\.venv\Scripts\python.exe -m reid metrics --out experiments/results/my-run
+```
+
+The same `python -m reid metrics` command works on Linux after activating its environment. Use a new output directory each time. Outputs include `metrics.json`, per-query `queries.csv`, retrieval plots, and descriptor ablations. No new dependencies are required. [`experiments/RESEARCH.md`](experiments/RESEARCH.md) explains all metrics, timing/ground-truth conventions, real crop and frame manifests, and NPZ input. Run `python -m pytest -q` for the regression suite.
+
+The archived paper run is `experiments/results/paper-local-20260914`. It uses generated data and cannot establish real multi-camera Re-ID accuracy. It reports both the larger-vector LSH speed advantage and the small image-gallery case where exhaustive search is faster. Unknown-object threshold failures and unfavorable descriptor ablations remain in the paper. The local defaults and C1 YAML now have stricter minimum and maximum box limits; no remote hosts were modified or started.

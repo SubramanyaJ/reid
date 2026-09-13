@@ -24,17 +24,15 @@ detection:
 tracking:
   min_hits: 6
   max_missed: 14
-  min_vehicle_fraction: 0.008
-  max_vehicle_fraction: 0.4
-  min_width_fraction: 0.065
-  min_height_fraction: 0.1
-  min_foreground_fraction: 0.004
-  min_fill_ratio: 0.3
+  min_vehicle_fraction: 0.006
+  max_vehicle_fraction: 0.65
+  min_width_fraction: 0.055
+  min_height_fraction: 0.09
+  min_foreground_fraction: 0.003
+  min_fill_ratio: 0.25
   min_aspect_ratio: 0.4
   max_aspect_ratio: 3.5
   min_motion_consistency: 0.4
-  max_height_fraction: 0.85
-  max_width_fraction: 0.8
 features:
   weights: {color: 1.0, texture: 0.65, structure: 0.7, statistics: 0.4}
   local_verifier: ORB           # ORB, SIFT, or NONE
