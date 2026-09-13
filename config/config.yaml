@@ -17,13 +17,22 @@ detection:
   method: MOG2                  # MOG2 or KNN
   history: 500
   variance_threshold: 24
-  min_component_fraction: 0.0003
+  min_component_fraction: 0.0008
+  min_core_radius_fraction: 0.015 # thin isolated fragments have no substantial core
+  max_hole_fraction: 0.001       # fill only small enclosed holes
   grabcut: false
 tracking:
-  min_hits: 4
+  min_hits: 6
   max_missed: 14
-  min_vehicle_fraction: 0.002
+  min_vehicle_fraction: 0.006
   max_vehicle_fraction: 0.65
+  min_width_fraction: 0.055
+  min_height_fraction: 0.09
+  min_foreground_fraction: 0.003
+  min_fill_ratio: 0.25
+  min_aspect_ratio: 0.4
+  max_aspect_ratio: 3.5
+  min_motion_consistency: 0.4
 features:
   weights: {color: 1.0, texture: 0.65, structure: 0.7, statistics: 0.4}
   local_verifier: ORB           # ORB, SIFT, or NONE
@@ -55,3 +64,6 @@ network:
   timeout_seconds: 3
   max_body_bytes: 2000000
   sync_batch: 32
+visualization:
+  thumbnail_limit: 300           # local bounded JPEG cache; never written into blocks
+  thumbnail_size: 240            # maximum edge in pixels

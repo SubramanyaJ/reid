@@ -11,9 +11,12 @@ DEFAULTS = {
     "camera": {"source": None, "width": 960, "height": 540, "fps": 20,
                "warmup_seconds": 4, "reconnect_seconds": 3},
     "detection": {"method": "MOG2", "history": 500, "variance_threshold": 24,
-                  "min_component_fraction": .0003, "grabcut": False},
-    "tracking": {"min_hits": 4, "max_missed": 14, "min_vehicle_fraction": .002,
-                 "max_vehicle_fraction": .65},
+                  "min_component_fraction": .0008, "min_core_radius_fraction": .015,
+                  "max_hole_fraction": .001, "grabcut": False},
+    "tracking": {"min_hits": 6, "max_missed": 14, "min_vehicle_fraction": .006,
+                 "max_vehicle_fraction": .65, "min_width_fraction": .055, "min_height_fraction": .09,
+                 "min_foreground_fraction": .003, "min_fill_ratio": .25,
+                 "min_aspect_ratio": .4, "max_aspect_ratio": 3.5, "min_motion_consistency": .4},
     "features": {"weights": {"color": 1., "texture": .65, "structure": .7, "statistics": .4},
                  "local_verifier": "ORB"},
     "lsh": {"tables": 8, "bits": 12, "seed": 17, "multiprobe": True, "brute_force": False},
@@ -23,6 +26,7 @@ DEFAULTS = {
     "context": {"transitions": {}},
     "consensus": {"interval_seconds": 2, "max_transactions": 64},
     "network": {"timeout_seconds": 3, "max_body_bytes": 2000000, "sync_batch": 32},
+    "visualization": {"thumbnail_limit": 300, "thumbnail_size": 240},
 }
 
 
@@ -57,6 +61,23 @@ def load_config(path):
         raise ValueError("detection.method must be MOG2 or KNN")
     if cfg["features"]["local_verifier"] not in ("ORB", "SIFT", "NONE"):
         raise ValueError("local_verifier must be ORB, SIFT, or NONE")
+    for section, names in {
+        "detection": ["min_component_fraction", "min_core_radius_fraction", "max_hole_fraction"],
+        "tracking": ["min_vehicle_fraction", "max_vehicle_fraction", "min_width_fraction", "min_height_fraction",
+                     "min_foreground_fraction", "min_fill_ratio", "min_motion_consistency"],
+    }.items():
+        for name in names:
+            value = cfg[section][name]
+            if not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 1:
+                raise ValueError(f"{section}.{name} must be a finite fraction in [0,1]")
+    if not 0 < cfg["tracking"]["min_aspect_ratio"] <= cfg["tracking"]["max_aspect_ratio"] <= 10:
+        raise ValueError("Invalid tracking aspect ratio range")
+    if cfg["tracking"]["min_vehicle_fraction"] >= cfg["tracking"]["max_vehicle_fraction"]:
+        raise ValueError("Minimum object area must be smaller than maximum object area")
+    for key, low, high in [("thumbnail_limit", 1, 5000), ("thumbnail_size", 64, 512)]:
+        value = cfg["visualization"][key]
+        if type(value) is not int or not low <= value <= high:
+            raise ValueError(f"visualization.{key} must be an integer in [{low},{high}]")
     weights = cfg["features"]["weights"]
     if any(not math.isfinite(v) or v < 0 for v in weights.values()) or sum(weights.values()) <= 0:
         raise ValueError("Feature weights must be finite, nonnegative, and not all zero")

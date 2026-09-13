@@ -28,6 +28,18 @@ def create_app(runtime):
     def ui_status():
         return runtime.snapshot()
 
+    @app.get("/api/objects")
+    def objects():
+        return {"observations": runtime.observation_cards(), "identities": runtime.identity_cards(),
+                "node_id": runtime.node_id}
+
+    @app.get("/api/thumbnails/{event_id}")
+    def thumbnail(event_id: str):
+        data = runtime.thumbnails.get(event_id)
+        if data is None:
+            raise HTTPException(404, "Preview unavailable: older observation, evicted, or no local image")
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=60"})
+
     @app.get("/api/frame")
     def frame():
         with runtime.lock:

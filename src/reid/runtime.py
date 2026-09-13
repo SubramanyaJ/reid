@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 import threading
 import time
+import uuid
 import cv2
 import numpy as np
 from .cameras.capture import Camera
@@ -24,6 +25,7 @@ from .reid.gallery import Gallery
 from .segmentation.refine import crop_candidate
 from .storage.database import Database
 from .tracking.tracker import Tracker, iou
+from .visualization.thumbnails import Thumbnails
 
 log = logging.getLogger(__name__)
 
@@ -56,8 +58,9 @@ class Runtime:
         self.local = LocalVerifier(cfg["features"]["local_verifier"])
         self.network = PeerNetwork(self)
         self.events = deque(maxlen=100)
+        self.thumbnails = Thumbnails(self.db, cfg["visualization"]["thumbnail_limit"], cfg["visualization"]["thumbnail_size"])
         self.jpeg = None
-        self.metrics = {"fps": 0., "detections": 0, "tracks": [], "candidate_count": 0, "frames": 0,
+        self.metrics = {"fps": 0., "detections": 0, "raw_regions": 0, "tracks": [], "candidate_count": 0, "frames": 0,
                         "mask_fraction": 0., "shadow_fraction": 0., "error": None}
         self.log_path = Path(cfg["node"]["database"]).parent / "decisions.jsonl"
         self.replay()
@@ -101,7 +104,7 @@ class Runtime:
 
     def log_decision(self, track, timestamp, evidence, plate, quality):
         record = {"timestamp": timestamp, "local_id": track.local_id, "global_id": track.global_id,
-                  "evidence": evidence, "plate": plate, "quality": quality}
+                  "evidence": evidence, "plate": plate, "quality": quality, "preview_id": track.preview_id}
         with self.lock:
             self.events.appendleft(record)
         with self.log_path.open("a", encoding="utf-8") as stream:
@@ -120,7 +123,7 @@ class Runtime:
         for track in tracks:
             if track.state == "CONFIRMED" and timestamp - track.last_observation >= self.cfg["reid"]["observation_interval"]:
                 track.last_observation = timestamp
-                crop, object_mask, visibility = crop_candidate(frame, mask, track.bbox, self.cfg["detection"]["grabcut"])
+                crop, object_mask, visibility = crop_candidate(frame, mask, track.bbox, self.cfg["detection"]["grabcut"], track.foreground_mask)
                 if crop is None:
                     continue
                 occluded = any(other is not track and iou(track.bbox, other.bbox) > .25 for other in tracks)
@@ -140,12 +143,20 @@ class Runtime:
                     occupied = {other.global_id for other in tracks if other is not track and other.global_id}
                     gid, evidence = self.gallery.decide(payload, self.node_id, timestamp, occupied, track.global_id)
                     track.evidence = evidence
+                    packet = None
                     if gid:
                         track.global_id = gid
                         _, encoded = cv2.imencode(".png", crop)
                         observation_hash = bytes_hash(encoded.tobytes() + object_mask.tobytes())
                         packet = make_packet(self.key, self.node_id, track.local_id, gid, timestamp, observation_hash,
                                              payload, evidence, self.descriptor.profile)
+                    preview_id = packet["transaction"]["event"]["event_id"] if packet else str(uuid.uuid4())
+                    self.thumbnails.put(preview_id, crop, object_mask,
+                        {"node_id": self.node_id, "local_id": track.local_id, "global_id": track.global_id,
+                         "timestamp": timestamp, "quality": quality, "plate": plate, "evidence": evidence,
+                         "submitted": packet is not None})
+                    track.preview_id = preview_id
+                    if packet:
                         self.receive_packet(packet)
                     self.log_decision(track, timestamp, evidence, plate, details)
                 else:
@@ -154,20 +165,24 @@ class Runtime:
             x, y, w, h = np.rint(track.bbox).astype(int)
             color = (0, 103, 255) if track.state == "CONFIRMED" else (240, 240, 0)
             cv2.rectangle(annotated, (x, y), (x+w, y+h), color, 2)
+            if track.state == "CONFIRMED" and track.foreground_mask is not None:
+                contours, _ = cv2.findContours(track.foreground_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                cv2.drawContours(annotated, contours, -1, (240, 240, 0), 1, offset=(x, y))
             gid_label = track.global_id[:10] if track.global_id else "UNASSIGNED"
             visual = track.evidence.get("visual_score")
             score_label = f" V:{visual:.2f}" if visual is not None else ""
             cv2.putText(annotated, f"{track.local_id} {gid_label}{score_label}", (max(0, x), max(16, y-6)),
                         cv2.FONT_HERSHEY_SIMPLEX, .45, color, 1, cv2.LINE_AA)
             snapshot.append({"local_id": track.local_id, "global_id": track.global_id, "state": track.state,
-                             "quality": track.quality, "evidence": track.evidence})
+                             "quality": track.quality, "evidence": track.evidence,
+                             "preview_url": self.preview_url(self.node_id, track.preview_id)})
         if warm:
             cv2.putText(annotated, "BACKGROUND WARMUP", (20, 32), cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 103, 255), 2)
         ok, jpeg = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 78])
         with self.lock:
             if ok:
                 self.jpeg = jpeg.tobytes()
-            self.metrics.update(detections=len(components), tracks=snapshot,
+            self.metrics.update(detections=self.tracker.candidate_count if not warm else 0, raw_regions=len(components), tracks=snapshot,
                 candidate_count=max((t.evidence.get("candidate_count", 0) for t in tracks), default=0),
                 frames=self.metrics["frames"] + 1, mask_fraction=float((mask > 0).mean()),
                 shadow_fraction=float((shadows > 0).mean()), error=None)
@@ -185,6 +200,38 @@ class Runtime:
                 log.exception("Frame processing failed")
                 with self.lock:
                     self.metrics["error"] = str(error)
+
+    def preview_url(self, node_id, event_id):
+        if not event_id or node_id not in self.members:
+            return None
+        try:
+            uuid.UUID(event_id)
+        except (ValueError, TypeError):
+            return None
+        base = "" if node_id == self.node_id else self.members[node_id]["url"].rstrip("/")
+        return f"{base}/api/thumbnails/{event_id}"
+
+    def observation_cards(self):
+        cards = self.thumbnails.recent(12)
+        for card in cards:
+            evidence = card["evidence"]
+            reference = evidence.get("identity_preview") or {}
+            card["preview_url"] = self.preview_url(self.node_id, card["preview_id"])
+            card["matched_preview_url"] = self.preview_url(evidence.get("matched_node_id"), evidence.get("matched_event_id"))
+            card["reference_preview_url"] = self.preview_url(reference.get("node_id"), reference.get("event_id"))
+            card["committed"] = self.db.contains(card["preview_id"])
+        return cards
+
+    def identity_cards(self, limit=16):
+        with self.gallery.lock:
+            recent = sorted(self.gallery.identities.values(), key=lambda item: item["last_seen"], reverse=True)[:limit]
+            return [{"global_id": item["global_id"], "last_camera": item["last_camera"], "last_seen": item["last_seen"],
+                     "gallery_size": len(item["visual_gallery"]),
+                     "cameras": sorted({record["camera"] for record in item["camera_history"]}),
+                     "preview_url": self.preview_url((item.get("preview") or {}).get("node_id"), (item.get("preview") or {}).get("event_id")),
+                     "exemplars": [{"event_id": entry["event_id"], "camera": entry.get("node_id"),
+                                    "preview_url": self.preview_url(entry.get("node_id"), entry["event_id"])}
+                                   for entry in item["visual_gallery"][-3:]]} for item in recent]
 
     def snapshot(self):
         tip = self.db.tip()

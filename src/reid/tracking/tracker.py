@@ -38,6 +38,9 @@ class Track:
     readings: list = field(default_factory=list)
     last_center: np.ndarray | None = None
     last_measured_time: float = 0.
+    foreground_area: int = 0
+    foreground_mask: np.ndarray | None = None
+    preview_id: str | None = None
 
 
 class Tracker:
@@ -45,19 +48,33 @@ class Tracker:
         self.camera_id, self.cfg = camera_id, config
         self.tracks = []
         self.next_hypothesis, self.next_id = 1, next_id
+        self.candidate_count = 0
+
+    def valid_geometry(self, box, foreground_area, shape):
+        height, width = shape[:2]
+        x, y, w, h = box
+        if min(w, h) <= 0:
+            return False
+        fraction = w * h / (width * height)
+        # Hard resolution-relative floors apply at every vertical position.
+        # Perspective only makes the area requirement slightly stricter near the bottom.
+        relative_y = float(np.clip((y + h) / height, 0, 1))
+        minimum = self.cfg["min_vehicle_fraction"] * (1 + .25 * relative_y)
+        return (w / width >= self.cfg["min_width_fraction"] and
+                h / height >= self.cfg["min_height_fraction"] and
+                minimum <= fraction <= self.cfg["max_vehicle_fraction"] and
+                foreground_area / (width * height) >= self.cfg["min_foreground_fraction"] and
+                foreground_area / (w * h) >= self.cfg["min_fill_ratio"] and
+                self.cfg["min_aspect_ratio"] <= w / h <= self.cfg["max_aspect_ratio"])
 
     def valid_vehicle(self, track, shape):
-        height, width = shape[:2]
-        x, y, w, h = track.bbox
-        fraction = w * h / (width * height)
-        relative_y = np.clip((y + h) / height, 0, 1)
-        # Broad image-relative scale envelope; no cross-camera pixel comparison.
-        minimum = self.cfg["min_vehicle_fraction"] * (.35 + .65 * relative_y)
-        geometry = (w / width > .018 and h / height > .025 and
-                    minimum <= fraction <= self.cfg["max_vehicle_fraction"] and .65 <= w / max(h, 1) <= 5.5)
-        return geometry and track.hits >= self.cfg["min_hits"] and track.consistency >= .25
+        return (self.valid_geometry(track.bbox, track.foreground_area, shape) and
+                track.hits >= self.cfg["min_hits"] and track.consistency >= self.cfg["min_motion_consistency"])
 
     def update(self, components, timestamp, shape):
+        # Invalid small fragments cannot create hypotheses or shrink established objects.
+        components = [c for c in components if self.valid_geometry(c.bbox, c.area, shape)]
+        self.candidate_count = len(components)
         tracks = [t for t in self.tracks if t.state != "DELETED"]
         for t in tracks:
             dt = max(0, min(timestamp - t.last_time, 2.))
@@ -102,6 +119,7 @@ class Tracker:
                     t.velocity = .65 * t.velocity + .35 * measured
                 t.last_center, t.last_measured_time = c.copy(), timestamp
                 t.bbox = component.bbox.copy()
+                t.foreground_area, t.foreground_mask = component.area, component.mask
                 t.hits += 1
                 t.missed = 0
                 if self.valid_vehicle(t, shape):
@@ -121,7 +139,8 @@ class Tracker:
             if j in matched_components or j in merged:
                 continue
             t = Track(self.next_hypothesis, component.bbox.copy(), timestamp,
-                      last_center=center(component.bbox), last_measured_time=timestamp)
+                      last_center=center(component.bbox), last_measured_time=timestamp,
+                      foreground_area=component.area, foreground_mask=component.mask)
             self.next_hypothesis += 1
             tracks.append(t)
         self.tracks = [t for t in tracks if t.state != "DELETED"]

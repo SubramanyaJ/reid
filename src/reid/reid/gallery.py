@@ -40,7 +40,7 @@ class Gallery:
                 "camera_history": [], "observation_history": [], "last_seen": 0., "last_camera": None,
                 "last_position": [0., 0.], "last_scale": 0.})
             entry = {"event_id": event["event_id"], "vector": payload["vector"], "quality": payload["quality"],
-                     "local": payload["local"], "timestamp": event["timestamp"]}
+                     "local": payload["local"], "timestamp": event["timestamp"], "node_id": event["node_id"]}
             gallery = identity["visual_gallery"]
             vector = np.asarray(entry["vector"])
             similarities = [float(np.dot(vector, old["vector"])) for old in gallery]
@@ -69,7 +69,8 @@ class Gallery:
             identity["observation_history"] = (identity["observation_history"] + [event["event_id"]])[-64:]
             if event["timestamp"] >= identity["last_seen"]:
                 identity.update(last_seen=event["timestamp"], last_camera=event["camera_id"],
-                                last_position=payload["position"], last_scale=payload["scale"])
+                                last_position=payload["position"], last_scale=payload["scale"],
+                                preview={"event_id": event["event_id"], "node_id": event["node_id"]})
             self.identities[gid] = identity
             # Commit summary and applied marker together, surviving interrupted replay.
             from ..provenance.crypto import canonical
@@ -109,6 +110,12 @@ class Gallery:
                                                    payload["scale"], self.cfg["context"])
                 local = LocalVerifier.compare(payload["local"], entry["local"])
                 evidence = fuse(visual, plate_score, temporal, spatial, self.cfg["reid"], plate_confidence, local)
+                origin = entry.get("node_id")
+                if origin is None:
+                    old_packet = self.db.packet(entry["event_id"])
+                    origin = old_packet["transaction"]["event"]["node_id"] if old_packet else None
+                evidence.update(matched_global_id=gid, matched_event_id=entry["event_id"], matched_node_id=origin,
+                                identity_preview=identity.get("preview"))
                 ranked.append((gid, evidence))
             # Reject contradictions before selecting the best viable candidate.
             ranked.sort(key=lambda pair: (pair[1]["decision"] != "NO_MATCH", pair[1]["confidence"]), reverse=True)

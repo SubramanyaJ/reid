@@ -2,7 +2,7 @@
 
 A runnable research MVP that associates moving vehicle observations across independent cameras using classical vision, a handcrafted descriptor, random-hyperplane LSH, font-template plate recognition, and soft contextual evidence. Identical Python peers replicate signed identity-event provenance through a majority-certificate ledger. A peer may process a camera or run solely as a consortium participant.
 
-**Implementation status:** source, component tests, an offline demonstration, and evaluation tools are included. Execution, dependency installation, camera trials, and tests were intentionally left for the operator, as requested in `prompt.md`. No test pass, measured accuracy, benchmark speedup, or successful hardware deployment is claimed here. Run the commands below to establish those results on your equipment.
+**Implementation status:** the MVP has been deployed on three LAN peers with two live cameras. The whole-object filtering and thumbnail update includes regression tests for isolated fingers, connected hand silhouettes, nearby-object separation, size/foreground gates, component-specific crops, preview retention, and API references. Live operation checks establish that the software runs and replicates signed events; they do not establish hand/vehicle recognition accuracy. See `LAN-RUNBOOK.md` for this deployment’s start/stop commands and camera indices.
 
 This is **not production-grade vehicle Re-ID**, an accurate general-purpose plate reader, or a Byzantine fault tolerant blockchain. Consensus agrees on signed claims and their order; it does not prove that a physical vehicle was identified correctly.
 
@@ -201,9 +201,9 @@ Selected settings:
 | --- | --- | --- |
 | `detection.method` | `MOG2` | `KNN` is the alternative |
 | `detection.history` | 500 | Background model history |
-| `detection.min_component_fraction` | 0.0003 | Resolution-relative component floor, with nine-pixel lower bound |
+| `detection.min_component_fraction` | 0.0008 | Resolution-relative component floor, with nine-pixel lower bound |
 | `detection.grabcut` | false | Refine only confirmed candidates |
-| `tracking.min_hits` | 4 | Matched observations required for promotion |
+| `tracking.min_hits` | 6 | Matched observations required for promotion |
 | `tracking.max_missed` | 14 | Temporary missing-frame allowance |
 | `reid.min_quality` | 0.42 | Observation admission threshold |
 | `reid.observation_interval` | 1.5 s | Maximum descriptor/OCR observation frequency per track |
@@ -225,11 +225,11 @@ These are heuristic starting values. They are not calibrated performance claims.
 
 ## 5. Classical vision and temporal tracking
 
-MOG2 is the primary foreground model. Shadow pixels (OpenCV value 127) are preserved as a separate mask and reported in the monitor; only strong foreground pixels become components. A 3×3 elliptical opening/closing removes isolated noise conservatively, followed by an image-area-relative component filter.
+MOG2 is the primary foreground model. Shadow pixels (OpenCV value 127) are preserved as a separate mask and reported in the monitor; only strong foreground pixels become components. A 3×3 elliptical opening/closing removes isolated noise conservatively. Small enclosed holes are filled. Connected regions must contain a substantial interior core measured by a distance transform; thin disconnected fragments are removed, while fingers/details attached to a substantial palm/object retain their silhouette. No large dilation joins nearby objects. Image-area-relative component filtering follows.
 
 Connected components produce **raw foreground regions**. They are not immediately accepted as vehicles. The tracker first creates tentative hypotheses and solves one-to-one associations using the Hungarian algorithm. The cost combines predicted centroid distance, bbox IoU, and logarithmic width/height consistency. A constant-velocity estimate updates from measured centroids. Bounded temporary gaps coast with prediction instead of forcing new IDs.
 
-Vehicle promotion uses persistence, normalized width/height, image-area fraction, aspect ratio, and residual-based motion consistency. A broad minimum-area envelope varies with normalized vertical location. This is a coarse perspective plausibility heuristic, not an automatic camera calibration. It avoids a single fixed global pixel-size threshold but can still reject unusual vehicle views or accept other moving objects.
+Whole-object promotion uses six matched observations, hard normalized width/height floors, bbox area, actual foreground area, mask occupancy, aspect ratio, and residual-based motion consistency. The perspective envelope can only tighten the area floor near the bottom of the image; it can no longer relax the floor for small regions near the top. Small fragments are excluded from association so an established whole-object track cannot shrink into a finger-sized detection. This is geometry, not a semantic vehicle or hand classifier, and other sufficiently large moving objects can still pass.
 
 The tracker intentionally avoids merging components solely because they are nearby. If a large component contains the predicted centers of multiple established objects, both hypotheses coast through the ambiguous region. The component does not collapse them into one ID. This also means fragmented vehicles may produce multiple hypotheses: the MVP favors conservative separation over aggressive fragment fusion. Long occlusion, crossing similar objects, and large mask changes can still cause fragmentation or identity switches.
 
@@ -238,6 +238,39 @@ Track states are `TENTATIVE`, `CONFIRMED`, `LOST`, and `DELETED`. Hypotheses hav
 Optional GrabCut starts with the confirmed candidate crop and foreground-derived seeds. The refined mask is retained only if area and overlap remain compatible with the original. OpenCV errors or poor refinement fall back to the original mask. GrabCut never creates detections.
 
 Observation quality combines relative crop size, Laplacian sharpness, mask occupancy, clipping visibility, and motion stability. Overlapping tracks receive an occlusion penalty; very small, clipped, or sparsely segmented crops are strongly penalized. This is a heuristic blur/occlusion screen, not a visibility oracle. Poor observations are logged as `SKIP_QUALITY` and do not enter the gallery.
+
+
+### Whole-object filtering for the hand demonstration
+
+The LAN deployment uses the following tighter settings on C1 and C2. The source camera indices remain C1=`1`, C2=`0`; C3 remains camera-less. Existing configs explicitly override defaults, so changing Python defaults alone does not retune a previously generated YAML. Update each active YAML on its own host and restart that node when tuning.
+
+```yaml
+detection:
+  min_component_fraction: 0.0008
+  min_core_radius_fraction: 0.015
+  max_hole_fraction: 0.001
+  grabcut: true
+tracking:
+  min_hits: 6
+  min_vehicle_fraction: 0.006
+  max_vehicle_fraction: 0.65
+  min_width_fraction: 0.055
+  min_height_fraction: 0.09
+  min_foreground_fraction: 0.003
+  min_fill_ratio: 0.25
+  min_aspect_ratio: 0.4
+  max_aspect_ratio: 3.5
+  min_motion_consistency: 0.4
+visualization:
+  thumbnail_limit: 300
+  thumbnail_size: 240
+```
+
+At 960×540, a candidate needs a bbox at least about **53 pixels wide and 49 pixels high**, bbox area at least **3,110–3,888 pixels** depending on vertical location, at least **1,555 foreground pixels**, and at least 25% bbox occupancy. The interior-core radius must reach about **8 pixels**. These requirements work together; satisfying width alone is insufficient. A whole hand with a connected palm can pass, while a thin isolated finger should fail. Raising the three minimum size/area fractions suppresses smaller objects; lowering them permits more distant objects but risks returning to finger/noise tracks. The `min_vehicle_fraction` name is retained for YAML compatibility and now acts as a hard whole-object area floor.
+
+Candidate crops use only the associated connected component's mask, not every foreground pixel inside its bounding box. Optional GrabCut runs only after a stable candidate exists, with the existing fallback rules. The live overlay draws the selected component contour in cyan within the track bbox. DETECTION now counts geometry-qualified candidate regions; RAW REGIONS shows the earlier segmentation count. Lost tracks can coast briefly after an object disappears.
+
+The hand demonstration changes the desired object scale, not the non-ML requirement. This is **not semantic hand detection**: a large arm, face, or other moving region can satisfy geometry too. A stationary hand may be absorbed into the background; physically touching objects may remain one component. A palm that is not foreground cannot be reconstructed reliably from disconnected fingers without additional scene assumptions. Keep the camera stationary and allow the four-second warm-up before testing.
 
 ## 6. MVSV-G visual descriptor and retrieval
 
@@ -263,7 +296,7 @@ The default index has eight tables with twelve bits each. Insertions map `(globa
 
 LSH only generates candidates. For every retrieved identity, exact cosine similarity is computed against all its retained exemplars, and the strongest exemplar supplies candidate-specific local verification. ORB or SIFT ratio-test correspondences are screened for deterministic median-translation consistency. Sparse correspondences yield missing local evidence. Available local evidence contributes ten percent of the visual channel. This simple geometry check is not viewpoint-invariant and may reduce a true match under large camera changes.
 
-An identity retains up to eight useful exemplars. Nearly identical descriptors (cosine ≥0.985) replace an existing exemplar only when quality improves. Overflow uses greedy quality and descriptor diversity selection. Plate, camera, and recent observation histories are also bounded in the identity summary. Event sidecars are retained separately for provenance-bound catch-up, so **bounded galleries do not imply bounded total database size**. No frame-by-frame video or raw crop archive is stored by the live node.
+An identity retains up to eight useful exemplars. Nearly identical descriptors (cosine ≥0.985) replace an existing exemplar only when quality improves. Overflow uses greedy quality and descriptor diversity selection. Plate, camera, and recent observation histories are also bounded in the identity summary. Event sidecars are retained separately for provenance-bound catch-up, so **bounded galleries do not imply bounded total database size**. No frame-by-frame video archive is stored. The monitor now retains a bounded cache of masked, downscaled JPEG observation thumbnails on their originating peer, separate from gallery descriptors and the ledger.
 
 ## 7. Classical plate channel
 
@@ -314,7 +347,7 @@ Each accepted identity observation produces an Ed25519-signed transaction. Event
 
 The ledger contains **no images, video, plate strings, or complete feature vectors**. Feature/plate/local-keypoint data travels as a separate payload whose canonical SHA-256 digest is covered by the signed event. Receivers verify membership, signatures, field schema, descriptor dimension/norm/profile, payload hash, feature bytes, plate hash, and basic bounds before admitting it. Committed sidecars must match the actual committed transaction, not merely reuse an event ID. A valid signature establishes the source of a claim, not the quality of its vision.
 
-Serialization is UTF-8 JSON with sorted keys, compact separators, ASCII escaping, and nonfinite numbers rejected. Feature hashes use explicit little-endian float32 bytes. SHA-256 provenance hashes and LSH bit signatures have entirely different roles. The observation hash covers encoded crop bytes and its segmentation mask; raw observation bytes are discarded after hashing in live operation. Feature sidecars and unsalted plate hashes can still disclose sensitive information; excluding raw images from blocks is not anonymization.
+Serialization is UTF-8 JSON with sorted keys, compact separators, ASCII escaping, and nonfinite numbers rejected. Feature hashes use explicit little-endian float32 bytes. SHA-256 provenance hashes and LSH bit signatures have entirely different roles. The observation hash covers encoded crop bytes and its segmentation mask; full-resolution raw observation bytes are discarded after hashing in live operation, while a masked, downscaled JPEG thumbnail is retained for visual inspection. This lossy preview is a monitor aid, not a replacement for the original hash-bound crop/mask bytes. Feature sidecars and unsalted plate hashes can still disclose sensitive information; excluding raw images from blocks is not anonymization.
 
 ### SQLite layout
 
@@ -358,6 +391,19 @@ Every peer serves the same local monitor, using background `#181818`, accent `#f
 The camera image is the local source with bboxes, local IDs, abbreviated global IDs, and visual similarity where available. The page polls status once per second and JPEG previews at up to four per second; processing may run faster. It shows processing FPS, component count, tracks, candidate count, foreground/shadow fractions, peer states/heights, quorum, scheduled proposer, pending transactions, block tip, and recent decisions. The integrity indicator reflects startup verification and validated subsequent acceptance; it is not a continuous independent scan of disk corruption. Use `verify-ledger` for a complete rescan.
 
 No-camera nodes show a disabled camera feed while maintaining normal gossip, votes, catch-up, and gallery state. The UI is read-only, uses native browser APIs, and does not expose an administrative control panel.
+
+
+### Inspecting what was re-identified
+
+The monitor now includes **RE-ID OBJECTS / RECENT DECISIONS** with the current local observation beside the exact gallery exemplar selected for comparison, camera labels, global/local IDs, decision, visual score, quality, and commit state. `UNCERTAIN`/rejected observations can be inspected without creating a ledger event. For `NO_MATCH`, the other image is a compared/rejected candidate, not a successful match. Clicking a preview opens a larger inspection dialog.
+
+**IDENTITY GALLERY / ALL CAMERAS** shows the latest observation per identity, its source cameras, and up to three retained exemplars. The peer-only C3 monitor can show C1/C2 images. Tracking rows also have a thumbnail. Preview dimensions preserve the crop aspect ratio, mask background pixels to dark gray, and cap the longest edge at 240 pixels by default.
+
+Thumbnails live in the additive local `thumbnails` SQLite table. At most `visualization.thumbnail_limit` observations (default 300) are retained per node, including uncertain local observations. Entries survive restart and the oldest are evicted automatically. Existing ledger blocks, signed-event schemas, feature vectors, descriptor profiles, and provenance hashes are unchanged. **No image bytes are added to the ledger or signed feature payload.**
+
+`GET /api/objects` returns lightweight observation/identity metadata. `GET /api/thumbnails/{event_id}` returns a bounded JPEG or HTTP 404. Cross-camera image URLs point to the configured originating peer: the browser needs to reach that peer. Thumbnails are not replicated with the ledger. If the origin is offline, the image was evicted, or the event predates this change, the UI explicitly displays “Preview unavailable.” Older original crops were not retained and cannot be regenerated. When the exact matched exemplar is unavailable but a newer image of that identity exists, the comparison panel labels the fallback **Identity reference (latest)** so it is not mistaken for the exact scoring exemplar.
+
+Preview images are visual inspection aids, not cryptographically verified reconstructions of the full-resolution observation hash. Like the live camera preview, they are accessible over the configured trusted LAN without application-level authentication. No continuous raw-video archive is introduced.
 
 ## 11. Offline synthetic demonstration
 

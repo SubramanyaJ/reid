@@ -1,0 +1,80 @@
+node:
+  id: C3
+  host: 0.0.0.0
+  port: 9000
+  private_key: keys/C3.pem
+  database: ../../data/lan/C3/state.sqlite
+members:
+- id: C1
+  url: http://10.78.223.22:9000
+  public_key: aCvphvFAa905eqlBx7dB0IqqdbS89SNB+8w3Wc/DPeQ=
+- id: C2
+  url: http://10.78.223.1:9000
+  public_key: qKWTB+/q7BKMEjqcw68cHb0dn/NOGZOEezNDliZpytY=
+- id: C3
+  url: http://10.78.223.84:9000
+  public_key: OxneAIKsopbRACckRuYdGfV0xIrzaGUCSHSHFtNWz6k=
+camera:
+  source: null
+  width: 960
+  height: 540
+  fps: 20
+  warmup_seconds: 4
+  reconnect_seconds: 3
+detection:
+  method: MOG2
+  history: 500
+  variance_threshold: 24
+  min_component_fraction: 0.0008
+  grabcut: true
+  min_core_radius_fraction: 0.015
+  max_hole_fraction: 0.001
+tracking:
+  min_hits: 6
+  max_missed: 14
+  min_vehicle_fraction: 0.006
+  max_vehicle_fraction: 0.65
+  min_width_fraction: 0.055
+  min_height_fraction: 0.09
+  min_foreground_fraction: 0.003
+  min_fill_ratio: 0.25
+  min_aspect_ratio: 0.4
+  max_aspect_ratio: 3.5
+  min_motion_consistency: 0.4
+features:
+  weights:
+    color: 1.0
+    texture: 0.65
+    structure: 0.7
+    statistics: 0.4
+  local_verifier: ORB
+lsh:
+  tables: 8
+  bits: 12
+  seed: 17
+  multiprobe: true
+  brute_force: false
+reid:
+  min_quality: 0.42
+  observation_interval: 1.5
+  gallery_size: 8
+  match_threshold: 0.82
+  uncertain_threshold: 0.68
+  visual_floor: 0.6
+  margin: 0.035
+plate:
+  min_confidence: 0.58
+  min_readings: 2
+  template_directory: null
+context:
+  transitions: {}
+consensus:
+  interval_seconds: 2
+  max_transactions: 64
+network:
+  timeout_seconds: 3
+  max_body_bytes: 2000000
+  sync_batch: 32
+visualization:
+  thumbnail_limit: 300
+  thumbnail_size: 240
