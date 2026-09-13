@@ -1,0 +1,57 @@
+# Provision keys and complete membership with: python -m reid init --nodes C1 C2 C3
+node:
+  id: C1
+  host: 0.0.0.0
+  port: 9000
+  private_key: local/keys/C1.pem
+  database: ../data/C1/state.sqlite
+members: []
+camera:
+  source: null                   # 0, http://phone:4747/video, rtsp://camera/stream
+  width: 960
+  height: 540
+  fps: 20                       # clamped to <=24
+  warmup_seconds: 4
+  reconnect_seconds: 3
+detection:
+  method: MOG2                  # MOG2 or KNN
+  history: 500
+  variance_threshold: 24
+  min_component_fraction: 0.0003
+  grabcut: false
+tracking:
+  min_hits: 4
+  max_missed: 14
+  min_vehicle_fraction: 0.002
+  max_vehicle_fraction: 0.65
+features:
+  weights: {color: 1.0, texture: 0.65, structure: 0.7, statistics: 0.4}
+  local_verifier: ORB           # ORB, SIFT, or NONE
+lsh:
+  tables: 8
+  bits: 12
+  seed: 17
+  multiprobe: true
+  brute_force: false
+reid:
+  min_quality: 0.42
+  observation_interval: 1.5
+  gallery_size: 8
+  match_threshold: 0.82
+  uncertain_threshold: 0.68
+  visual_floor: 0.60
+  margin: 0.035
+plate:
+  min_confidence: 0.58
+  min_readings: 2
+  template_directory: null      # optional manually supplied A.png ... Z.png, 0.png ... 9.png
+context:
+  # Keys like C1->C2; seconds and relative transition probability.
+  transitions: {}
+consensus:
+  interval_seconds: 2
+  max_transactions: 64
+network:
+  timeout_seconds: 3
+  max_body_bytes: 2000000
+  sync_batch: 32

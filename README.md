@@ -1,0 +1,503 @@
+# Classical Multi-Camera Vehicle Re-Identification
+
+A runnable research MVP that associates moving vehicle observations across independent cameras using classical vision, a handcrafted descriptor, random-hyperplane LSH, font-template plate recognition, and soft contextual evidence. Identical Python peers replicate signed identity-event provenance through a majority-certificate ledger. A peer may process a camera or run solely as a consortium participant.
+
+**Implementation status:** source, component tests, an offline demonstration, and evaluation tools are included. Execution, dependency installation, camera trials, and tests were intentionally left for the operator, as requested in `prompt.md`. No test pass, measured accuracy, benchmark speedup, or successful hardware deployment is claimed here. Run the commands below to establish those results on your equipment.
+
+This is **not production-grade vehicle Re-ID**, an accurate general-purpose plate reader, or a Byzantine fault tolerant blockchain. Consensus agrees on signed claims and their order; it does not prove that a physical vehicle was identified correctly.
+
+## 1. Scope and architecture
+
+The initial arrangement can be C1 with a camera, C2 with a camera, and C3 without a camera. The implementation accepts any fixed positive number of configured peers. Every node uses the same entry point, serves the same network operations, validates the same blocks, and hosts the same monitoring interface. There is no dedicated validator, registry server, or permanent leader.
+
+```text
+Capture thread (optional on every peer)
+  camera index / HTTP MJPEG / RTSP
+    -> processing limiter (at most 24 FPS)
+    -> 3–5 s background warm-up after connection
+    -> MOG2 or KNN -> shadow/foreground separation -> morphology
+    -> connected components -> persistent motion hypotheses
+    -> geometry/persistence validation -> confirmed local tracks
+    -> optional GrabCut -> observation quality
+    -> MVSV-G descriptor ---------------------> LSH -> exact cosine
+    -> optional ORB/SIFT local evidence ----------------------|
+    -> geometric plate proposals -> template OCR -> aggregation|
+    -> soft camera/time context ------------------------------|
+    -> final evidence fusion -> match/new UUID/abstain
+    -> signed event + separate signed-hash-bound feature sidecar
+
+Async peer service (always present)
+  pending-event gossip <-> equal peers
+  scheduled proposer -> signed votes -> majority certificate
+  verified blocks -> local replicated ledger
+  verified state sidecars -> local bounded identity galleries
+  HTTP status, camera JPEG, and monitor interface
+```
+
+The implementation separates these responsibilities:
+
+| Package under `src/reid/` | Responsibility |
+| --- | --- |
+| `cameras` | Source opening, reconnection, warm-up timing, rate limiting |
+| `detection` | Background models, foreground/shadow masks, raw components |
+| `tracking` | Temporal hypotheses, geometry validation, prediction and local IDs |
+| `segmentation` | Mask extraction and conservative optional GrabCut |
+| `features` | Observation quality, MVSV-G, candidate-specific ORB/SIFT |
+| `plate` | Geometric localization, rectification, segmentation, templates, fuzzy aggregation |
+| `lsh` | Seeded random-hyperplane candidate index |
+| `reid` | Galleries, independent context scores, final fusion |
+| `provenance` | Canonical serialization, Ed25519, SHA-256, block verification |
+| `consensus` | Height-rotating proposal and persistent majority voting |
+| `network` | HTTP endpoints, transaction gossip, verified catch-up |
+| `storage` | Separate operational, identity, and committed-ledger SQLite tables |
+| `visualization` | Local monitor HTML/CSS/JavaScript |
+| `metrics` | Synthetic scenes, retrieval benchmark, pairwise Re-ID evaluation |
+
+`runtime.py` wires the subsystems together. `cli.py` contains actual project entry points. `tests/` covers the independent components and ledger lifecycle. `experiments/` contains an evaluation CSV example; generated results default to `experiments/results/`.
+
+### Non-ML constraint
+
+There are no learned detectors, embeddings, vocabularies, OCR engines, model downloads, or training steps. The code does not use YOLO, neural networks, PyTorch, TensorFlow, ONNX, Deep SORT, CLIP, Tesseract, or BoVW. MOG2/KNN are OpenCV classical adaptive background subtraction algorithms, not learned vehicle classifiers. ORB/SIFT are classical local features. Plate templates are rendered glyphs or manually supplied bitmap characters. Random Gaussian LSH hyperplanes are seeded projections, not trained parameters.
+
+## 2. Installation
+
+Use Python 3.10 or newer; Python 3.11/3.12 is a sensible starting environment. OpenCV, NumPy, SciPy, Matplotlib, cryptography, FastAPI, HTTPX, Uvicorn, PyYAML, and pytest are installed through `requirements.txt` and the editable package definition in `pyproject.toml`. A Python virtual environment is local to each laptop. There is no Node.js/frontend build step.
+
+### Linux
+
+Run from a clone/copy of this repository; change the first path if your checkout differs.
+
+```bash
+cd ~/gitthings/reid
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m reid --help
+```
+
+On Debian/Ubuntu systems missing venv or OpenCV shared libraries, install the applicable system packages first:
+
+```bash
+sudo apt-get update
+sudo apt-get install python3-venv libgl1 libglib2.0-0
+```
+
+### Windows PowerShell
+
+The project root for this checkout is `E:\home\gitthings\reid`.
+
+```powershell
+Set-Location E:\home\gitthings\reid
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m reid --help
+```
+
+If local policy blocks activation, invoke the environment directly; activation is not required:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m reid --help
+```
+
+Do not run multiple Uvicorn workers against one node database. The CLI explicitly uses one worker. To stop a node, press Ctrl+C in its terminal.
+
+## 3. Provisioning peers
+
+### Three local peers for a first smoke check
+
+The following command is identical on Linux and Windows after activating the environment:
+
+```text
+python -m reid init --nodes C1 C2 C3 --out config/local
+```
+
+This creates `config/local/C1.yaml`, `C2.yaml`, `C3.yaml`, and three private key files under `config/local/keys/`. Each configuration includes the complete public membership list. Local addresses are `127.0.0.1:9000`, `:9001`, and `:9002`. Each node gets its own SQLite database under `data/<node>/`. All cameras initially have `source: null`.
+
+The command refuses to overwrite an existing configuration/key. Use a different output directory when constructing a separate consortium. Node names are configurable; the three names are an example, not a protocol limit. A single-node consortium is also supported and has quorum one.
+
+Open three terminals, activate the environment in each, and run one command per terminal:
+
+```text
+python -m reid run --config config/local/C1.yaml
+python -m reid run --config config/local/C2.yaml
+python -m reid run --config config/local/C3.yaml
+```
+
+Open the local monitors:
+
+- C1: <http://127.0.0.1:9000>
+- C2: <http://127.0.0.1:9001>
+- C3: <http://127.0.0.1:9002>
+
+With no camera and no events, a healthy chain remains at genesis (height zero). Nodes do not generate empty blocks to animate the UI. Configure cameras to produce real observations, or run the independent offline demonstration below.
+
+### Three laptops on a LAN
+
+Provision this example **once**, with the actual laptop IP addresses substituted, then distribute the resulting files:
+
+```text
+python -m reid init --nodes C1 C2 C3 --hosts 192.168.1.101 192.168.1.102 192.168.1.103 --port 9000 --out config/lan
+```
+
+When hostnames/IPs differ, each uses TCP port 9000. Repeated hosts receive successive ports. Copy the repository to every laptop. Place the generated `C1.yaml` and `keys/C1.pem` on laptop 1, `C2.yaml` and `keys/C2.pem` on laptop 2, and the corresponding C3 files on laptop 3, preserving the `config/lan/` layout. Each node configuration includes **all public** members, but each laptop needs only its own private key. Keep the provisioning key copies securely or remove them manually after securely transferring ownership; do not check private keys into Git.
+
+On laptop 1, run:
+
+```text
+python -m reid run --config config/lan/C1.yaml
+```
+
+Use the corresponding C2/C3 config on the other laptops. Allow the configured TCP port through each host firewall for the trusted peer network. `node.host` is the listening bind address; each `members[].url` is the reachable peer address. `0.0.0.0` is a bind address, not a peer URL.
+
+**Membership is fixed for one chain.** Every node must use exactly the same member IDs, public keys, and URL strings, because those values define genesis. Changing membership or addresses requires a new consortium/database in this MVP; there is no membership reconfiguration protocol. Do not delete only one peer's votes while keeping the rest of its identity/ledger in service: durable votes are part of consensus safety.
+
+Peer HTTP endpoints and the monitoring UI assume a trusted LAN. Events, proposals, and votes are cryptographically authenticated, but HTTP transport, camera previews, feature packets, and status endpoints are not access-controlled or encrypted by this application. Status responses are advisory; signatures and certificates establish acceptance. Use an isolated lab network, VPN, or externally managed authenticated TLS proxy for the intended deployment. Never treat a member's signature as proof that its reported identity is physically correct.
+
+## 4. Configuration and cameras
+
+Edit the generated node YAML. `config/config.yaml` is an annotated template, not a ready-to-run provisioned identity; its membership is intentionally empty. Paths in YAML resolve relative to that YAML file, making a copied `config/local/` or `config/lan/` layout portable. Feature weights and descriptor profile must agree across peers. Changing a descriptor profile in an existing database is rejected to prevent incompatible galleries.
+
+Example camera configuration:
+
+```yaml
+camera:
+  source: 0
+  width: 960
+  height: 540
+  fps: 20
+  warmup_seconds: 4
+  reconnect_seconds: 3
+```
+
+Source examples:
+
+```yaml
+# OpenCV local camera index; use an integer, not "0".
+source: 0
+
+# DroidCam-style HTTP/MJPEG; use the endpoint your phone app exposes.
+source: "http://192.168.1.120:4747/video"
+
+# RTSP; use the actual camera stream path and credentials if required.
+source: "rtsp://192.168.1.121:554/stream1"
+
+# Camera-less peer, still fully participating in ledger and gallery synchronization.
+source: null
+```
+
+Only place one `source` entry in the actual YAML. Local video-file paths are also accepted by OpenCV for manual experiments; at EOF the capture loop reconnects and repeats with fresh warm-up. The offline synthetic demo does not require a camera or network service.
+
+The capture loop clamps processing to at most 24 FPS, including frame processing time. It attempts to request the configured capture resolution and resizes delivered frames to the configured analysis resolution. Network streams use OpenCV's FFmpeg backend with five-second open/read timeouts; backend/codec support is platform-dependent. A failed source enters `DISCONNECTED` and retries. Every fresh connection resets the background model and local hypotheses, preserves the monotonic local ID counter, and warms up for the configured 3–5 seconds. A blocked device driver may still delay shutdown beyond the requested timeout. Camera failures do not stop the separate peer service.
+
+Use a stationary camera and let an initially unobstructed scene warm up. There is no manually configured ROI, homography, or perspective calibration. Camera motion and unstable exposure damage background subtraction. The FPS cap limits processing, not the remote camera's encoder rate. Reading is synchronous and some capture backends may buffer frames; low-latency capture is backend-dependent.
+
+Selected settings:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `detection.method` | `MOG2` | `KNN` is the alternative |
+| `detection.history` | 500 | Background model history |
+| `detection.min_component_fraction` | 0.0003 | Resolution-relative component floor, with nine-pixel lower bound |
+| `detection.grabcut` | false | Refine only confirmed candidates |
+| `tracking.min_hits` | 4 | Matched observations required for promotion |
+| `tracking.max_missed` | 14 | Temporary missing-frame allowance |
+| `reid.min_quality` | 0.42 | Observation admission threshold |
+| `reid.observation_interval` | 1.5 s | Maximum descriptor/OCR observation frequency per track |
+| `reid.gallery_size` | 8 | Maximum descriptor exemplars per identity |
+| `features.local_verifier` | `ORB` | `SIFT` or `NONE` also supported |
+| `lsh.tables / bits / seed` | 8 / 12 / 17 | Reproducible hyperplane families |
+| `lsh.multiprobe` | true | Probe all one-bit neighbors as well as exact bucket |
+| `lsh.brute_force` | false | Bypass LSH for comparative experiments |
+| `reid.match_threshold` | 0.82 | Final match-score threshold |
+| `reid.uncertain_threshold` | 0.68 | Abstention band lower threshold |
+| `reid.visual_floor` | 0.60 | Minimum visual evidence, even with plate/context support |
+| `reid.margin` | 0.035 | Minimum separation between viable top candidates |
+| `plate.min_confidence / min_readings` | 0.58 / 2 | Track plate evidence requirements |
+| `consensus.interval_seconds` | 2 | Delay between peer/consensus passes |
+| `consensus.max_transactions` | 64 | Maximum transactions in a proposed block; protocol cap 128 |
+| `network.sync_batch` | 32 | Missing blocks fetched per peer per pass |
+
+These are heuristic starting values. They are not calibrated performance claims. All nodes need compatible descriptor settings; camera and local quality settings may differ.
+
+## 5. Classical vision and temporal tracking
+
+MOG2 is the primary foreground model. Shadow pixels (OpenCV value 127) are preserved as a separate mask and reported in the monitor; only strong foreground pixels become components. A 3×3 elliptical opening/closing removes isolated noise conservatively, followed by an image-area-relative component filter.
+
+Connected components produce **raw foreground regions**. They are not immediately accepted as vehicles. The tracker first creates tentative hypotheses and solves one-to-one associations using the Hungarian algorithm. The cost combines predicted centroid distance, bbox IoU, and logarithmic width/height consistency. A constant-velocity estimate updates from measured centroids. Bounded temporary gaps coast with prediction instead of forcing new IDs.
+
+Vehicle promotion uses persistence, normalized width/height, image-area fraction, aspect ratio, and residual-based motion consistency. A broad minimum-area envelope varies with normalized vertical location. This is a coarse perspective plausibility heuristic, not an automatic camera calibration. It avoids a single fixed global pixel-size threshold but can still reject unusual vehicle views or accept other moving objects.
+
+The tracker intentionally avoids merging components solely because they are nearby. If a large component contains the predicted centers of multiple established objects, both hypotheses coast through the ambiguous region. The component does not collapse them into one ID. This also means fragmented vehicles may produce multiple hypotheses: the MVP favors conservative separation over aggressive fragment fusion. Long occlusion, crossing similar objects, and large mask changes can still cause fragmentation or identity switches.
+
+Track states are `TENTATIVE`, `CONFIRMED`, `LOST`, and `DELETED`. Hypotheses have internal IDs; only validated tracks receive IDs such as `C1-T00001`. The next local counter persists in SQLite. A reconnect or restart starts fresh trajectories without reusing old local IDs. Full motion trajectories are operational in-memory state, not replicated global state.
+
+Optional GrabCut starts with the confirmed candidate crop and foreground-derived seeds. The refined mask is retained only if area and overlap remain compatible with the original. OpenCV errors or poor refinement fall back to the original mask. GrabCut never creates detections.
+
+Observation quality combines relative crop size, Laplacian sharpness, mask occupancy, clipping visibility, and motion stability. Overlapping tracks receive an occlusion penalty; very small, clipped, or sparsely segmented crops are strongly penalized. This is a heuristic blur/occlusion screen, not a visibility oracle. Poor observations are logged as `SKIP_QUALITY` and do not enter the gallery.
+
+## 6. MVSV-G visual descriptor and retrieval
+
+MVSV-G is a **602-dimensional `float32` vector** defined by this repository, not a claim of a validated standard descriptor. The crop is letterboxed to 128×80 with its aspect ratio preserved. Statistics operate on the foreground mask; eroded interior masks reduce boundary contamination in texture and gradient extraction.
+
+| Block | Dimension | Construction |
+| --- | ---: | --- |
+| Color | 180 | HSV 12/8/8 and Lab 8/8/8 histograms over whole crop and two horizontal bands; 2×2 coarse Lab mean/std |
+| Texture | 54 | Radius 1/2/3 rotation-invariant uniform eight-neighbor LBP, ten bins each; eight-bin log local variance for each radius |
+| Structure | 332 | Compact 4×8-cell unsigned nine-bin gradient histograms (288); edge orientation/density (10); 6×4 silhouette plus row/column occupancy (34) |
+| Region statistics | 36 | Six-channel HSV/Lab mean, std, interquartile range; 15 off-diagonal covariance values; occupancy, crop aspect, gradient magnitude |
+
+Histogram blocks use square-root frequency normalization. Each major block is independently L2-normalized, multiplied by its configurable weight, concatenated, and finally L2-normalized. No camera ID, timestamp, plate text, transition probability, or position is included. The profile hash covers the descriptor version and weights; it is separate from each observation's feature hash.
+
+Random-hyperplane LSH is implemented from scratch:
+
+```text
+table t, bit b: h[t,b](x) = 1 if dot(r[t,b], x) >= 0, otherwise 0
+r[t,b] ~ Gaussian, drawn from a seeded NumPy generator
+```
+
+The default index has eight tables with twelve bits each. Insertions map `(global_id, event_id)` to buckets; replacement and eviction remove stale bucket entries. Query results are deduplicated. Optional multi-probe checks every bucket with Hamming distance one from the original signature. There is no exhaustive fallback in LSH mode: candidate misses are exposed rather than hidden. `brute_force: true` enumerates all gallery entries.
+
+LSH only generates candidates. For every retrieved identity, exact cosine similarity is computed against all its retained exemplars, and the strongest exemplar supplies candidate-specific local verification. ORB or SIFT ratio-test correspondences are screened for deterministic median-translation consistency. Sparse correspondences yield missing local evidence. Available local evidence contributes ten percent of the visual channel. This simple geometry check is not viewpoint-invariant and may reduce a true match under large camera changes.
+
+An identity retains up to eight useful exemplars. Nearly identical descriptors (cosine ≥0.985) replace an existing exemplar only when quality improves. Overflow uses greedy quality and descriptor diversity selection. Plate, camera, and recent observation histories are also bounded in the identity summary. Event sidecars are retained separately for provenance-bound catch-up, so **bounded galleries do not imply bounded total database size**. No frame-by-frame video or raw crop archive is stored by the live node.
+
+## 7. Classical plate channel
+
+Plate localization uses grayscale blackhat contrast, horizontal gradient energy, thresholding, morphological grouping, and rotated-rectangle area/aspect filters. Plausible regions undergo a four-corner perspective warp. CLAHE and adaptive thresholding are tried in both polarities. Character components are filtered geometrically and grouped by vertical alignment into one or multiple text lines, then sorted left-to-right within each line.
+
+Characters are normalized to 24×40 and compared using normalized correlation to hand-rendered OpenCV font templates. Several classical font faces/stroke widths provide a small deterministic template bank. Optionally set `plate.template_directory` to a directory of manually supplied `A.png` through `Z.png` and `0.png` through `9.png`. Supplied glyphs may have either polarity. These are character templates, not a trained recognition model or labelled vehicle embedding database.
+
+The selected character score and runner-up margin contribute to reading confidence. A track retains up to 24 readings. Normalized text strips separators and uppercases alphanumeric characters. Fuzzy comparison uses weighted Levenshtein distance with reduced substitution costs for common ambiguities (`0/O/Q`, `1/I/L`, `2/Z`, `5/S`, `8/B`, `6/G`). Canonical text is a confidence-weighted medoid with a support requirement.
+
+Plate states are `UNKNOWN`, `SUPPORTED`, and `CONFLICTING`. Missing/low-confidence readings remain `UNKNOWN`; disagreement can produce `CONFLICTING`. Only supported states produce a plate comparison score. Missing evidence remains `None`, never a fabricated zero. Supported fuzzy plate matches can independently nominate identities that visual LSH failed to retrieve, but exact visual verification and the visual floor still apply.
+
+This template recognizer is deliberately limited. Real embossed fonts, dirt, screws, borders, skew, joined characters, non-Latin scripts, unusual layouts, and tiny plates will often fail. Multi-line support means line segmentation exists; it does not imply reliable recognition of every regional plate design. Re-ID can continue using visual evidence alone.
+
+## 8. Context, fusion, and identities
+
+The evidence record keeps `visual_score`, `plate_score`, `temporal_score`, and `spatial_score` separate until final fusion. Within one camera, normalized position distance, scale ratio, and elapsed time produce broad soft plausibility. Across cameras, raw coordinates are never compared. The default cross-camera evidence is intentionally neutral/broad. Optional transitions can provide broad timing windows and prior probabilities:
+
+```yaml
+context:
+  transitions:
+    C1->C2:
+      min_seconds: 3
+      max_seconds: 180
+      probability: 0.7
+    C2->C1:
+      min_seconds: 3
+      max_seconds: 240
+      probability: 0.6
+```
+
+Out-of-window observations receive smoothly reduced timing support, not rejection. Clock skew is not corrected by the application; synchronize laptop clocks for sensible event histories and context. Vehicles need not remain continuously visible between cameras.
+
+Available channels are fused by a normalized weighted sum. Visual, temporal, and spatial weights are 0.78, 0.07, and 0.05; a supported plate channel receives weight `0.35 × plate_confidence`. Missing plate evidence is omitted from both numerator and denominator. A strong supported plate contradiction (similarity <0.45 at confidence ≥0.65), or visual similarity below the visual floor, forces `NO_MATCH` regardless of favorable context.
+
+Results are `MATCH`, `NO_MATCH`, or `UNCERTAIN`. A narrow score margin between two viable identities becomes `UNCERTAIN`. New tracks only allocate a new UUID when the decision is `NO_MATCH`. `UNCERTAIN` tracks remain unassigned and retry on a later eligible observation. An already assigned local track is compared to its bound identity; inconsistent later observations are skipped instead of repeatedly switching IDs. Identities assigned to other currently active local tracks are excluded from new-track matching. There is no distributed simultaneous-camera exclusivity rule.
+
+Global IDs are `G-<UUID>` and independent of hashes. The monitor abbreviates them for space; signed events and stored state retain full UUIDs. Local and global identifiers are different namespaces. A second camera can retrieve a replicated gallery and associate its new local track with the first camera's global UUID.
+
+Gallery state contains `global_id`, `visual_gallery`, `plate_history`, `camera_history`, `observation_history`, `last_seen`, `last_camera`, `last_position`, and `last_scale`. Local pending observations are available immediately to their originating peer; remote gallery updates require committed events and valid sidecars. Consequently, two cameras observing an unseen vehicle simultaneously can create duplicate global identities before synchronization. There is no automatic identity-merging or retroactive repair protocol. The ledger records these decisions honestly; it does not resolve semantic conflicts.
+
+`data/<node>/decisions.jsonl` logs quality decisions and all independent evidence channels, including abstentions. Match confidence is the fused score; new-identity confidence is the complement of the strongest rejected score, or 0.5 when no candidate exists. These are heuristic scores, not calibrated probabilities. An abstention is local operational evidence and does not create an identity ledger event.
+
+## 9. Provenance, storage, and consensus
+
+### Signed events and off-ledger state
+
+Each accepted identity observation produces an Ed25519-signed transaction. Event fields include event UUID, timestamp, node/camera/local/global IDs, the four evidence scores, decision, confidence, crop/mask observation hash, feature hash, plate-state hash, sidecar payload hash, and descriptor profile hash.
+
+The ledger contains **no images, video, plate strings, or complete feature vectors**. Feature/plate/local-keypoint data travels as a separate payload whose canonical SHA-256 digest is covered by the signed event. Receivers verify membership, signatures, field schema, descriptor dimension/norm/profile, payload hash, feature bytes, plate hash, and basic bounds before admitting it. Committed sidecars must match the actual committed transaction, not merely reuse an event ID. A valid signature establishes the source of a claim, not the quality of its vision.
+
+Serialization is UTF-8 JSON with sorted keys, compact separators, ASCII escaping, and nonfinite numbers rejected. Feature hashes use explicit little-endian float32 bytes. SHA-256 provenance hashes and LSH bit signatures have entirely different roles. The observation hash covers encoded crop bytes and its segmentation mask; raw observation bytes are discarded after hashing in live operation. Feature sidecars and unsalted plate hashes can still disclose sensitive information; excluding raw images from blocks is not anonymization.
+
+### SQLite layout
+
+Each node independently opens its own SQLite database in WAL mode with full synchronous durability. Tables separate:
+
+- Operational state: settings/profile markers, local ID counter, sync cursors, persistent vote/proposal records, pending events.
+- Identity state: bounded summaries plus signed feature/plate sidecars and idempotent application markers.
+- Committed state: ordered blocks and a committed-event index.
+
+Consensus operations use a local reentrant lock and database transactions. Votes and proposed blocks survive a restart. Gallery updates and their applied-event markers commit together. Event and sidecar archives currently grow without pruning; production retention and compaction are future work. A SQLite file is never copied from another peer and never acts as the consortium authority.
+
+### Majority protocol
+
+Let `N` be the configured member count and `q = floor(N/2) + 1`. Members are sorted by node ID. At height `h ≥ 1`, proposer `members[(h−1) mod N]` is scheduled. It selects pending signed events, creates one durable proposal extending its current tip, and signs the block hash. Peers verify the proposal and persist one signed vote per height. Repeated requests for the same hash return the existing vote; a different hash at that height is rejected even after restart.
+
+The proposer collects distinct valid votes. With at least `q`, it commits and broadcasts the block with its quorum certificate. Blocks include index, timestamp, proposer ID, transactions, previous hash, block hash, proposal signature, and consensus metadata containing the votes. The block hash covers its immutable core; the certificate is independently verified, allowing equivalent valid vote subsets without changing the block identity. Duplicate voters do not count. Duplicate committed event IDs are rejected.
+
+In the honest crash/recovery model, majority intersection and durable one-vote-per-height prevent two different blocks from obtaining honest majorities at the same height. This assumes stable membership, uncompromised keys, and retained durable votes. **This protocol is not Byzantine fault tolerant.** A faulty member may lie about observations; compromised voters can violate the assumptions. There is no proof-of-work, proof-of-stake, election service, or permanent coordinator.
+
+**Liveness is deliberately restricted.** There is no view change or proposer replacement. A missing scheduled proposer stalls the next height even if a majority of other peers is reachable. Lack of a majority also stalls commitment. A returning proposer reuses its persisted proposal and retries; returning followers catch up. This transparent choice avoids presenting an incomplete leader-election scheme as a correct consensus protocol. A three-peer partition does not imply the two connected peers can keep producing blocks indefinitely: they will stop when the absent peer's proposer turn arrives.
+
+### Catch-up and validation
+
+HTTP operations are:
+
+| Operation | Endpoint | Behavior |
+| --- | --- | --- |
+| Status | `GET /peer/status` | Node, tip, height, genesis fingerprint |
+| Missing blocks | `GET /peer/blocks?start=H&limit=N` | Ordered bounded block batch |
+| Current identity material | `GET /peer/state?after=EVENT_UUID` | Cursor-paginated committed signed sidecars |
+| Event gossip | `POST /peer/transaction` | Validate and retain signed event/payload |
+| Vote request | `POST /peer/proposal` | Verify proposal, persist and return signed vote |
+| Commit | `POST /peer/commit` | Verify extension and certificate before storing |
+
+The peer loop checks all configured peers, catches up a bounded batch, exchanges signed state packets, and gossips pending transactions again for retry. State scans cycle so packets missed during earlier block catch-up are revisited. Chain extension, deterministic proposer, transaction signatures, hashes, unique event IDs, and majority certificates are checked before acceptance. Conflicting history is rejected rather than overwritten. A sidecar unavailable on all online peers leaves a valid provenance block with an incomplete Re-ID gallery; block consensus itself does not guarantee off-ledger data availability.
+
+## 10. Monitor
+
+Every peer serves the same local monitor, using background `#181818`, accent `#ff6700`, and network color `#00F0F0`. Panels show NODE STATUS, CAMERA, DETECTION, TRACKING, RE-ID, VISUAL, PLATE, CONTEXT, LEDGER, CONSORTIUM, and CONSENSUS.
+
+The camera image is the local source with bboxes, local IDs, abbreviated global IDs, and visual similarity where available. The page polls status once per second and JPEG previews at up to four per second; processing may run faster. It shows processing FPS, component count, tracks, candidate count, foreground/shadow fractions, peer states/heights, quorum, scheduled proposer, pending transactions, block tip, and recent decisions. The integrity indicator reflects startup verification and validated subsequent acceptance; it is not a continuous independent scan of disk corruption. Use `verify-ledger` for a complete rescan.
+
+No-camera nodes show a disabled camera feed while maintaining normal gossip, votes, catch-up, and gallery state. The UI is read-only, uses native browser APIs, and does not expose an administrative control panel.
+
+## 11. Offline synthetic demonstration
+
+The demo renders moving vehicle-like objects in two synthetic fixed cameras and uses three real runtime/ledger instances, the third with no camera. It exercises warm-up, detection, tracking, features, quality, fusion, signed events, votes, replication, and ledger verification. Consensus transport is **in-process** in this demo; it does not test HTTP networking or physical cameras. It generates ground-truth boxes to attach approximate frame observations to known vehicle identities.
+
+Linux:
+
+```bash
+cd ~/gitthings/reid
+source .venv/bin/activate
+python -m reid demo --out experiments/results/demo
+python -m reid evaluate --csv experiments/results/demo/observations.csv --out experiments/results/demo/reid_metrics.json
+```
+
+Windows PowerShell:
+
+```powershell
+Set-Location E:\home\gitthings\reid
+.\.venv\Scripts\Activate.ps1
+python -m reid demo --out experiments/results/demo
+python -m reid evaluate --csv experiments/results/demo/observations.csv --out experiments/results/demo/reid_metrics.json
+```
+
+Inspect `C1.avi` and `C2.avi`, `observations.csv`, `evaluation.json`, `ledger_summary.json`, each node's `decisions.jsonl`, and its local SQLite database. AVI output uses MJPG through OpenCV; codec support must be present. The default 430 frames at 15 simulated FPS cover the two-camera schedule. Processing runs offline as fast as possible. This is a reproducible scene generator, but UUIDs, keys, and wall-clock anchors differ per run. An existing demo key directory is never overwritten; use `--out experiments/results/demo2` to repeat.
+
+The demo reports outcomes even if detections or cross-camera matches fail. It does not force global IDs to ground-truth labels, inject successful plate readings, or substitute measured performance with canned values. Success on rendered shapes would not establish accuracy on real vehicles.
+
+## 12. Tests and manual network checks
+
+Linux:
+
+```bash
+cd ~/gitthings/reid
+source .venv/bin/activate
+python -m pytest -q
+```
+
+Windows PowerShell:
+
+```powershell
+Set-Location E:\home\gitthings\reid
+.\.venv\Scripts\Activate.ps1
+python -m pytest -q
+```
+
+Tests cover descriptor dimensions/normalization/repeatability/discrimination; quality rejection; background warm-up; track persistence, gaps, expiry and merged components; seeded LSH insertion/removal; fuzzy and conflicting plates; missing-evidence fusion and contradiction protection; cross-camera coordinate independence; bounded persistent galleries; signed packet tampering; insufficient quorum; duplicate voters; proposer rotation; late block acceptance; ledger corruption; and durable vote/proposal replay. They do not establish real camera accuracy or complete OCR robustness. Tests are deliberately small, independent, and CPU-only.
+
+Manual HTTP checks with running local peers:
+
+```bash
+# Linux
+curl http://127.0.0.1:9000/peer/status
+curl http://127.0.0.1:9001/peer/status
+curl http://127.0.0.1:9002/peer/status
+```
+
+```powershell
+# Windows PowerShell
+Invoke-RestMethod http://127.0.0.1:9000/peer/status
+Invoke-RestMethod http://127.0.0.1:9001/peer/status
+Invoke-RestMethod http://127.0.0.1:9002/peer/status
+```
+
+After camera-generated events commit, confirm matching tip hashes. Stop C3, continue observations, then restart C3 with its original key/config/database. Observe missing-block catch-up and gallery recovery. Expect commitment to stall at C3's proposer turn while it is offline. Test an invalid signature or modified transaction with a disposable test consortium; rejection should leave the committed tip unchanged. The Python ledger tests already construct several invalid inputs without depending on a network service.
+
+Full local ledger verification, Linux:
+
+```bash
+source .venv/bin/activate
+python -m reid verify-ledger --config config/local/C1.yaml
+python -m reid verify-ledger --config config/local/C2.yaml
+python -m reid verify-ledger --config config/local/C3.yaml
+```
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m reid verify-ledger --config config/local/C1.yaml
+python -m reid verify-ledger --config config/local/C2.yaml
+python -m reid verify-ledger --config config/local/C3.yaml
+```
+
+The verifier checks genesis, all hashes and signatures, proposer order, chain extension, event uniqueness, and quorum certificates. An invalid chain exits nonzero. Run against the corresponding LAN config if using `config/lan/`.
+
+## 13. LSH benchmark and Re-ID evaluation
+
+### Retrieval benchmark
+
+Linux:
+
+```bash
+source .venv/bin/activate
+python -m reid benchmark --sizes 100 1000 5000 --queries 100 --out experiments/results/benchmark
+```
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m reid benchmark --sizes 100 1000 5000 --queries 100 --out experiments/results/benchmark
+```
+
+The benchmark compares brute-force matrix-vector cosine search against LSH candidate generation **plus exact candidate cosine verification**. Default input is synthetic labelled descriptor clusters, generated with seed 2026. It is a retrieval experiment, not vehicle-recognition accuracy. `benchmark.csv` records dataset size, query index, method, number of candidates, candidate recall, exact nearest-neighbor inclusion, top-1 label correctness, query latency in milliseconds, and index-build time. `benchmark.png` plots median query latency, mean candidates, and labelled candidate recall.
+
+Labelled candidate recall is `relevant descriptors returned / all relevant descriptors` for the query's label. It differs from whether at least one correct candidate was retrieved. Exact-top1 recall indicates whether the brute-force nearest descriptor was present in the LSH candidate set. Unlabelled data leave label metrics blank. Query timing excludes index construction and dataset loading, includes candidate retrieval and reranking, and is measured on the local machine. NumPy/BLAS thread settings, CPU cache, query order, dimension, and gallery distribution affect timings. Brute force can be faster for small datasets; no speedup is assumed.
+
+For real extracted descriptors, provide an NPZ with `vectors` shaped `(N,D)` and held-out `queries` shaped `(Q,D)`. Optionally include matching-length `labels` and `query_labels`; both must be supplied together. Use integer or fixed-width string labels, not pickled object arrays. Zero/nonfinite vectors are rejected, vectors are normalized, and NPZ loading disables pickle.
+
+```text
+python -m reid benchmark --dataset data/labelled_descriptors.npz --queries 200 --out experiments/results/real_benchmark
+```
+
+### End-to-end Re-ID evaluation
+
+Use CSV columns `truth_id,global_id,camera_id`; additional columns are ignored. Blank `global_id` means unresolved/abstained. `experiments/labelled_observations.example.csv` shows the format. `evaluate` reports resolved coverage, pairwise precision/recall/F1, and cross-camera-only versions, using independent physical labels as truth. Undefined ratios are JSON `null`. Pairwise metrics are computed only among resolved rows, so coverage must accompany the accuracy numbers. This tool does not implement MOTA, IDF1, or a full tracking benchmark, and its simple pair enumeration is quadratic in row count.
+
+```text
+python -m reid evaluate --csv data/labelled_observations.csv --out experiments/results/reid_evaluation.json
+```
+
+For a credible study: collect consented multi-camera sequences; label physical identities independently of this system; separate tuning and held-out captures; report camera geometry, time synchronization, resolution, weather, frame rate, and traffic density; evaluate quality filtering, LSH vs brute force, ORB/SIFT/none, plate enabled/missing, and context transitions; report abstention coverage, false associations, identity fragmentation, candidate misses, and processing latency. Also measure block latency and recovery behavior separately from vision accuracy. A hash-chain result is not a substitute for these measurements.
+
+## 14. Limitations and future work
+
+The following are material constraints of the actual implementation:
+
+- **Viewpoint:** coarse color/texture tolerate small appearance changes, but front/rear/side transitions can have different silhouettes and visible paint/glass. ORB/SIFT translation consistency is especially limited across viewpoint changes.
+- **Lighting:** automatic exposure, white balance, glare, headlights, shadows, and night capture distort color histograms and foreground masks. There is no photometric calibration.
+- **Occlusion:** short gaps coast; long occlusions expire. Bounding-box overlap is only a crude visibility estimate. Merged blobs preserve separate established hypotheses temporarily but do not solve general occlusion.
+- **Blur:** Laplacian sharpness helps reject poor observations but confounds blur with low texture and does not recover detail. Fast vehicles may leave too few useful frames.
+- **Scale:** letterboxing preserves crop aspect, but low-resolution distant vehicles lose plate and texture detail. Broad scale heuristics do not fit all road perspectives.
+- **Background contamination:** foreground and GrabCut errors can include road, neighboring vehicles, or cast shadows. Interior masking reduces but does not eliminate contamination.
+- **Nearby vehicles and segmentation errors:** components can fragment one vehicle or merge several. The conservative association model can still duplicate tracks, swap IDs, or reject unusual shapes. There is no semantic vehicle classifier.
+- **OCR errors:** fonts, alignment, non-Latin characters, multiple lines, reflective surfaces, and segmentation failures can corrupt strings. Template confidence is uncalibrated. Fuzzy ambiguity rules can also make different plates look similar.
+- **Visually similar vehicles:** same model/color vehicles may be indistinguishable with these descriptors. Weak or missing plates increase false matches; abstention and local exclusivity reduce but cannot eliminate them.
+- **Parked vehicles:** adaptive background subtraction gradually absorbs stationary vehicles. The system targets moving objects, not exhaustive parked-car inventory.
+- **LSH candidate misses:** finite tables/bits can miss the correct identity. Multi-probe and independent plate retrieval improve opportunity, but brute force is the necessary comparison baseline.
+- **Distributed identity races:** observations accepted before remote gallery arrival can create duplicate global UUIDs. Bound local IDs are not automatically reconsidered; there is no global reconciliation/merge event.
+- **Consensus availability:** fixed membership, majority availability, a reachable scheduled proposer, and durable votes are required. There is no view change, BFT, fork-choice repair, dynamic membership, or decentralized truth validation.
+- **Storage and transport:** event/sidecar archives grow; state scans are simple cyclic pagination; HTTP status/features/previews need external access control in a shared network. One peer process has one camera thread. Backend read buffering and CPU-heavy template matching can reduce achieved FPS.
+
+Future classical work can improve motion-aware fragment handling, multi-hypothesis association, automatic scene-scale envelopes, hand-designed illumination normalization, richer manually authored regional glyph sets, robust local geometric verification, adaptive descriptor diversity selection, and calibrated evidence thresholds using held-out evaluation. Distributed work can add authenticated transport, off-ledger availability acknowledgments, retention/checkpoints, explicit identity merge/retraction events, and a properly specified crash-tolerant view-change protocol with corresponding safety/liveness tests. Any such extension should preserve the separation between physical identification evidence and provenance agreement.

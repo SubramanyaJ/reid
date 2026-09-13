@@ -1,0 +1,5 @@
+truth_id,global_id,camera_id
+vehicle_A,G-example-1,C1
+vehicle_A,G-example-1,C2
+vehicle_B,G-example-2,C1
+vehicle_B,,C2

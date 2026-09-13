@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RE-ID / NODE MONITOR</title><style>
+:root{color-scheme:dark;--bg:#181818;--accent:#ff6700;--net:#00F0F0;--muted:#949494}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#e8e8e8;font:13px Consolas,monospace}
+header{display:flex;align-items:center;justify-content:space-between;padding:22px 28px;border-bottom:1px solid #393939}
+h1{font-size:16px;letter-spacing:3px;margin:0}h2{font-size:11px;color:var(--muted);letter-spacing:2px;margin:0 0 18px}
+main{padding:20px 28px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+section{background:#202020;border:1px solid #353535;padding:18px;min-width:0}.camera{grid-column:span 3;grid-row:span 2;padding:0;position:relative;min-height:300px}
+.camera h2{padding:18px;margin:0}.camera img{width:100%;display:block;aspect-ratio:16/9;object-fit:contain;background:#141414}.camera p{position:absolute;top:45%;left:0;right:0;text-align:center;color:var(--muted)}
+.value{font-size:28px;color:var(--accent);margin:10px 0}.network{color:var(--net)}.row{display:flex;justify-content:space-between;gap:8px;margin:10px 0}.muted{color:var(--muted)}
+.wide{grid-column:span 2}table{width:100%;border-collapse:collapse;font-size:11px}td,th{text-align:left;padding:9px 5px;border-bottom:1px solid #333}th{color:var(--muted);font-weight:normal}
+.hash{overflow-wrap:anywhere;font-size:11px;color:var(--muted)}.badge{color:var(--net);border:1px solid #345353;padding:6px 10px;font-size:11px}.error{color:#ff8060}
+footer{padding:0 28px 24px;color:var(--muted);font-size:11px}#connection{margin-left:20px}
+@media(max-width:1000px){main{grid-template-columns:repeat(2,minmax(0,1fr))}.camera{grid-column:span 2;grid-row:auto}}
+@media(max-width:560px){main{display:block;padding:12px}section{margin-bottom:12px}header{padding:18px}h1{font-size:12px}}
+</style></head><body>
+<header><h1>RE-ID <span style="color:var(--accent)">/</span> NODE MONITOR</h1><span class="badge" id="connection">CONNECTING</span></header>
+<main>
+<section class="camera"><h2>CAMERA <span id="cameraState"></span></h2><img id="camera" alt="Local camera with track overlays"><p id="noCamera">NO CAMERA FEED</p></section>
+<section><h2>NODE STATUS</h2><div class="value" id="node">—</div><div class="row"><span>FPS</span><span id="fps">—</span></div><div class="row"><span>FRAMES</span><span id="frames">0</span></div><div class="hash error" id="error"></div></section>
+<section><h2>DETECTION</h2><div class="value" id="detections">0</div><div class="row"><span>FOREGROUND</span><span id="mask">—</span></div><div class="row"><span>SHADOWS</span><span id="shadow">—</span></div></section>
+<section class="wide"><h2>TRACKING</h2><table><thead><tr><th>LOCAL ID</th><th>GLOBAL ID</th><th>STATE</th><th>QUALITY</th></tr></thead><tbody id="tracks"></tbody></table></section>
+<section><h2>RE-ID</h2><div class="value" id="identities">0</div><div class="row"><span>CANDIDATES</span><span id="candidates">0</span></div><div id="retrieval" class="muted"></div></section>
+<section><h2>VISUAL</h2><div id="descriptor" class="value" style="font-size:20px">MVSV-G</div><div class="row"><span>COSINE</span><span id="visual">—</span></div><div class="row"><span>LOCAL</span><span id="local">—</span></div></section>
+<section><h2>PLATE</h2><div class="value" style="font-size:20px" id="plate">UNKNOWN</div><div class="row"><span>FUZZY SCORE</span><span id="plateScore">—</span></div><div id="plateState" class="muted"></div></section>
+<section><h2>CONTEXT</h2><div class="row"><span>TEMPORAL</span><span id="temporal">—</span></div><div class="row"><span>SPATIAL</span><span id="spatial">—</span></div><div class="muted">SOFT EVIDENCE</div></section>
+<section><h2>LEDGER</h2><div class="value" id="height">0</div><div class="row"><span>INTEGRITY</span><span id="integrity" class="network">—</span></div><div id="hash" class="hash"></div></section>
+<section><h2>CONSENSUS</h2><div id="consensus" class="network"></div><div class="row"><span>QUORUM</span><span id="quorum">—</span></div><div class="row"><span>NEXT PROPOSER</span><span id="proposer">—</span></div><div class="row"><span>PENDING</span><span id="pending">0</span></div></section>
+<section class="wide"><h2>CONSORTIUM</h2><table><thead><tr><th>PEER</th><th>STATUS</th><th>HEIGHT</th></tr></thead><tbody id="peers"></tbody></table></section>
+<section class="wide"><h2>IDENTITY EVENTS</h2><table><thead><tr><th>LOCAL</th><th>DECISION</th><th>CONF.</th><th>GLOBAL</th></tr></thead><tbody id="events"></tbody></table></section>
+</main><footer>CLASSICAL VISION · PERMISSIONED PEERS · LOCAL OBSERVATIONS MAY BE PENDING COMMIT</footer>
+<script>
+const el=id=>document.getElementById(id),put=(id,v)=>el(id).textContent=v??'—',score=v=>v==null?'—':Number(v).toFixed(3);
+function table(id,rows){el(id).replaceChildren(...rows.map(row=>{const tr=document.createElement('tr');row.forEach(value=>{const td=document.createElement('td');td.textContent=value??'—';tr.append(td)});return tr}))}
+async function refresh(){try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error(r.status);const s=await r.json();put('connection','ONLINE');
+for(const [id,value] of Object.entries({node:s.node_id,fps:s.fps.toFixed(1),frames:s.frames,detections:s.detections,cameraState:s.camera,identities:s.identity_count,candidates:s.candidate_count,retrieval:s.retrieval,descriptor:s.descriptor,height:s.height,hash:s.block_hash,consensus:s.consensus,quorum:`${s.quorum}/${s.members}`,proposer:s.next_proposer,pending:s.pending,error:s.error,integrity:s.integrity?'VERIFIED':'FAILED'}))put(id,value);
+put('mask',(s.mask_fraction*100).toFixed(1)+'%');put('shadow',(s.shadow_fraction*100).toFixed(1)+'%');
+table('tracks',s.tracks.map(t=>[t.local_id,t.global_id?.slice(0,10),t.state,score(t.quality)]));
+table('peers',Object.entries(s.peers).map(([id,p])=>[id,p.state,p.height]));
+table('events',s.events.slice(0,7).map(e=>[e.local_id,e.evidence.decision,score(e.evidence.confidence),e.global_id?.slice(0,10)]));
+const latest=s.events.find(e=>e.evidence.decision!=='SKIP_QUALITY');const e=latest?.evidence??{};
+for(const [id,v] of Object.entries({visual:e.visual_score,local:e.local_score,plateScore:e.plate_score,temporal:e.temporal_score,spatial:e.spatial_score}))put(id,score(v));put('plate',latest?.plate.text??'UNKNOWN');put('plateState',latest?.plate.state??'UNKNOWN');
+el('noCamera').style.display=s.camera==='ONLINE'||s.camera==='WARMUP'?'none':'block';
+}catch(e){put('connection','OFFLINE')}finally{setTimeout(refresh,1000)}}
+let previousUrl=null;async function image(){try{const r=await fetch('/api/frame',{cache:'no-store'});if(r.ok&&r.status!==204){const url=URL.createObjectURL(await r.blob());el('camera').src=url;if(previousUrl)URL.revokeObjectURL(previousUrl);previousUrl=url}}catch(e){}finally{setTimeout(image,250)}}refresh();image();
+</script></body></html>

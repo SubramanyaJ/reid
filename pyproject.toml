@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "classical-vehicle-reid"
+version = "0.1.0"
+description = "Classical vehicle re-identification and a permissioned peer provenance ledger"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24,<3", "opencv-python>=4.8,<5", "scipy>=1.10,<2", "PyYAML>=6,<7", "cryptography>=42", "fastapi>=0.110,<1", "uvicorn>=0.29,<1", "httpx>=0.27,<1", "matplotlib>=3.7,<4"]
+
+[project.scripts]
+reid = "reid.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+reid = ["visualization/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
