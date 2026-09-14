@@ -18,7 +18,7 @@ from ..runtime import Runtime
 log = logging.getLogger(__name__)
 
 
-def replay_video(path, out=None, config=None, fps=None, warmup_seconds=None):
+def replay_video(path, out=None, config=None, fps=None, warmup_seconds=None, *, session=None):
     cfg = load_config(config) if config else deepcopy(DEFAULTS)
     if warmup_seconds is not None:
         if not math.isfinite(warmup_seconds) or warmup_seconds < 0:
@@ -44,7 +44,9 @@ def replay_video(path, out=None, config=None, fps=None, warmup_seconds=None):
         cfg['context']['transitions'] = {}
         save_private(cfg['node']['private_key'], key)
         (out/'replay_config.yaml').write_text(yaml.safe_dump(cfg, sort_keys=False), encoding='utf-8')
-        runtime = Runtime(cfg)
+        runtime = Runtime(cfg, metrics_filename='metrics_pending.json' if session else 'metrics_live.json')
+        if session:
+            session.attach(runtime)
         epoch = time.time()
         runtime.live_metrics.input_metadata.update(video.metadata,
             timestamp_epoch=epoch,
@@ -60,6 +62,9 @@ def replay_video(path, out=None, config=None, fps=None, warmup_seconds=None):
         runtime.live_metrics.flush()
         last_progress = time.monotonic()
         for frame, media_time in video.frames(cfg['camera']['width'], cfg['camera']['height']):
+            if session and session.stop.is_set():
+                state = 'interrupted'
+                break
             runtime.observation_context = {'frame_index': video.decoded_frames - 1,
                                            'video_time_seconds': media_time}
             runtime.live_metrics.input_metadata.update(decoded_frames=video.decoded_frames,
@@ -73,7 +78,8 @@ def replay_video(path, out=None, config=None, fps=None, warmup_seconds=None):
             if time.monotonic() - last_progress >= 5:
                 log.info('Replay: %d frames, %.1f video seconds', video.decoded_frames, media_time)
                 last_progress = time.monotonic()
-        state = 'complete'
+        else:
+            state = 'complete'
     except KeyboardInterrupt:
         state = 'interrupted'
         raise
@@ -91,11 +97,16 @@ def replay_video(path, out=None, config=None, fps=None, warmup_seconds=None):
             runtime.live_metrics.input_metadata['decoded_duration_seconds'] = video.decoded_frames / video.fps
             runtime.live_metrics.input_metadata['identity_count'] = len(runtime.gallery.identities)
             try:
-                runtime.live_metrics.flush(state)
+                if session:
+                    session.finished(state)
+                else:
+                    runtime.live_metrics.flush(state)
             finally:
-                runtime.db.close()
+                if not session:
+                    runtime.db.close()
     report = runtime.live_metrics.snapshot()
     if not report['counts']['evaluated_frames']:
         log.warning('All frames were background warmup; use a longer clip or reduce --warmup-seconds')
-    print(f"Processed {report['counts']['frames']} frames. Metrics: {out/'metrics_live.json'}")
+    print(f"Processed {report['counts']['frames']} frames. " +
+          ('Finish the browser review to export metrics_live.json.' if session else f"Metrics: {out/'metrics_live.json'}"))
     return report

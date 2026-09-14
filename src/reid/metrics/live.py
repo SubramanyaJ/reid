@@ -4,6 +4,7 @@ No labels are inferred from predictions. JSON checkpoints are atomic; an abrupt
 termination leaves the last checkpoint marked running rather than complete.
 """
 from collections import Counter
+from copy import deepcopy
 import csv
 from datetime import datetime, timezone
 import hashlib
@@ -25,7 +26,7 @@ def atomic_json(path, value):
 
 
 class LiveMetrics:
-    def __init__(self, directory, node_id, profile, settings):
+    def __init__(self, directory, node_id, profile, settings, filename='metrics_live.json'):
         self.directory = Path(directory)
         self.run_id = str(uuid.uuid4())
         self.archive = self.directory / 'runs' / self.run_id
@@ -34,6 +35,7 @@ class LiveMetrics:
         self.started, self.clock = utc(), time.monotonic()
         self.node_id, self.profile, self.settings = node_id, profile, settings
         self.input_metadata = {}
+        self.filename, self.accuracy_override = filename, None
         self.counts = Counter({key: 0 for key in ('frames', 'warmup_frames', 'evaluated_frames',
             'candidate_boxes', 'confirmed_track_frames', 'frame_errors', 'observations')})
         self.decisions = Counter()
@@ -95,7 +97,7 @@ class LiveMetrics:
                     'processing_fps': frames * 1000 / self.total_ms if self.total_ms else None,
                     'wall_fps': frames / elapsed if elapsed else None,
                     'scope': 'Successful process_frame calls including warmup, JPEG and per-frame work; capture/network wait excluded from processing time. Wall FPS includes idle time.'},
-                'accuracy': {
+                'accuracy': deepcopy(self.accuracy_override) if self.accuracy_override is not None else {
                     'status': 'ground_truth_required',
                     'pairwise_reid': None, 'cross_camera_pairwise_reid': None,
                     'detection_precision': None, 'detection_recall': None, 'detection_f1': None,
@@ -111,8 +113,8 @@ class LiveMetrics:
             if state:
                 self.state, self.ended, self.finished_clock = state, utc(), time.monotonic()
             value = self.snapshot()
-            atomic_json(self.archive / 'metrics_live.json', value)
-            atomic_json(self.directory / 'metrics_live.json', value)
+            atomic_json(self.archive / self.filename, value)
+            atomic_json(self.directory / self.filename, value)
             self.last_flush = time.monotonic()
 
 

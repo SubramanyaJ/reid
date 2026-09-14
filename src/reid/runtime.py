@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 
 
 class Runtime:
-    def __init__(self, cfg):
+    def __init__(self, cfg, metrics_filename='metrics_live.json'):
         self.cfg, self.node_id = cfg, cfg["node"]["id"]
         self.key = load_private(cfg["node"]["private_key"])
         self.members = {m["id"]: m for m in cfg["members"]}
@@ -65,9 +65,10 @@ class Runtime:
                         "mask_fraction": 0., "shadow_fraction": 0., "error": None}
         self.log_path = Path(cfg["node"]["database"]).parent / "decisions.jsonl"
         self.live_metrics = LiveMetrics(self.log_path.parent, self.node_id, self.descriptor.profile,
-            {key: cfg[key] for key in ('detection', 'tracking', 'features', 'lsh', 'reid')})
+            {key: cfg[key] for key in ('detection', 'tracking', 'features', 'lsh', 'reid')}, metrics_filename)
         self.request_shutdown = None
         self.observation_context = {}
+        self.review_sink = None
         self.replay()
 
     def replay(self):
@@ -112,6 +113,8 @@ class Runtime:
                   "evidence": evidence, "plate": plate, "quality": quality, "preview_id": track.preview_id,
                   **self.observation_context}
         record = self.live_metrics.observation(record)
+        if self.review_sink is not None:
+            self.review_sink.record(record)
         with self.lock:
             self.events.appendleft(record)
         with self.log_path.open("a", encoding="utf-8") as stream:
@@ -159,6 +162,8 @@ class Runtime:
                         packet = make_packet(self.key, self.node_id, track.local_id, gid, timestamp, observation_hash,
                                              payload, evidence, self.descriptor.profile)
                     preview_id = packet["transaction"]["event"]["event_id"] if packet else str(uuid.uuid4())
+                    if self.review_sink is not None:
+                        self.review_sink.capture_preview(preview_id, crop, object_mask)
                     self.thumbnails.put(preview_id, crop, object_mask,
                         {"node_id": self.node_id, "local_id": track.local_id, "global_id": track.global_id,
                          "timestamp": timestamp, "quality": quality, "plate": plate, "evidence": evidence,

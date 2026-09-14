@@ -57,6 +57,8 @@ def main():
     video.add_argument("--config", help="Optional existing config for vision settings; LAN keys/state are not reused")
     video.add_argument("--fps", type=float, help="Override file FPS for the video timeline (no wall-clock throttling)")
     video.add_argument("--warmup-seconds", type=float, help="Background warmup in video seconds; default 4")
+    video.add_argument("--ui", action="store_true", help="Start the local video frontend with human match review")
+    video.add_argument("--port", type=int, default=9000, help="Local frontend port for --ui; default 9000")
     verify = commands.add_parser("verify-ledger")
     verify.add_argument("--config", default="config/local/C1.yaml")
     demo = commands.add_parser("demo")
@@ -94,8 +96,12 @@ def main():
         if args.command == "init":
             initialize(args)
         elif args.command == "replay":
-            from .metrics.video import replay_video
-            replay_video(args.video, args.out, args.config, args.fps, args.warmup_seconds)
+            if args.ui:
+                from .network.replay import serve_replay
+                serve_replay(args.video, args.out, args.config, args.fps, args.warmup_seconds, args.port)
+            else:
+                from .metrics.video import replay_video
+                replay_video(args.video, args.out, args.config, args.fps, args.warmup_seconds)
         elif args.command == "run":
             import uvicorn
             from .runtime import Runtime

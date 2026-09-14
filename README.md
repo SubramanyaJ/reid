@@ -2,6 +2,41 @@
 
 ## Process a stored MP4 on one machine
 
+### Video frontend with human-reviewed accuracy
+
+Add `--ui` to open a local video review service:
+
+```powershell
+Set-Location E:\home\gitthings\reid
+.\.venv\Scripts\python.exe -m reid replay --video "E:\videos\recording.mp4" --ui --out experiments/results/video-review-01
+```
+
+Open **http://127.0.0.1:9000/** and click **Start video**. If that port is occupied, add `--port 9001` and open http://127.0.0.1:9001/. The frontend listens locally; no LAN peers or cameras are required. The video does not begin until you press Start.
+
+1. Watch the annotated video preview while the recording is processed.
+2. For each queued pair, compare **Current observation** with **Earlier candidate**. Click an image to enlarge it.
+3. Choose **Approve · same object** or **Reject · different objects** based on physical identity. The model's prediction is hidden on the review card to reduce labeling bias.
+4. After the video reaches EOF, finish any remaining reviews. The frontend then displays the measured scores and enables **Download metrics_live.json**. The file is also saved automatically in the output directory and its `runs/<run-id>/` archive.
+
+The queue includes accepted matches and uncertain/rejected proposals with an actual compared exemplar. New identities with no candidate have no pair to review. Including non-accepted proposals provides negative predictions as well as positive predictions. Each frozen pair uses the exact images from that observation; review images are kept in the run database independently of the normal bounded preview cache. Labels do not change the pipeline's predictions or gallery. Every answer is saved immediately in SQLite; final labels are also exported to `match_reviews.csv` beside both final metric files.
+
+While processing or review is incomplete, only **`metrics_pending.json`** is written. **`metrics_live.json` is published only after EOF and every queued pair has a label.** Keep the terminal/server running until review finishes; closing/reopening the browser is fine, but closing the server early interrupts the session. The current UI does not resume an interrupted server session; its saved database still retains the images and labels. Review time does not reduce the reported processing throughput.
+
+The final report puts actual human-scored results under **`accuracy.match_decisions`**:
+
+| Field | Definition |
+|---|---|
+| `accuracy` | `(TP + TN) / reviewed comparisons` |
+| `precision` | `TP / (TP + FP)` among accepted model matches |
+| `recall` | `TP / (TP + FN)` among human-positive candidate pairs |
+| `f1` | `2 TP / (2 TP + FP + FN)` |
+| `tp`, `fp`, `fn`, `tn` | Counts comparing the frozen model decision with your answer |
+| `coverage`, `reviewed`, `total`, `pending` | Review completeness and sample counts |
+
+Here model `MATCH` is positive; `UNCERTAIN` and compared `NO_MATCH` are **not accepted**, counted as negative for this stated operating policy. Your same-object/different-object answer supplies the reference label. Recall covers only candidate pairs actually presented, not objects missed by detection or candidates missed by the index. These are comparison-level scores, not exhaustive identity-clustering, cross-camera, box/mask, rank-1/mAP, IDF1, or MOTA accuracy. Repeated observations may be correlated. If a denominator has no examples, its ratio remains undefined (`null`); if the video generates no comparisons, the report explicitly says `no_comparisons`.
+
+### Terminal-only replay
+
 Use `replay` to process a local recording through the same foreground, tracking, crop, descriptor, and identity-decision code used by camera mode. No camera, SSH connection, running LAN peers, or prior `init` command is required. This mode runs in the terminal and exits at the end of the file; it does not start the web monitor.
 
 ```powershell

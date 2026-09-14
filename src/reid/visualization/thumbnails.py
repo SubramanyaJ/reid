@@ -14,18 +14,23 @@ class Thumbnails:
 
     def put(self, event_id, crop, mask, metadata):
         uuid.UUID(event_id)
+        jpeg = self.encode(crop, mask, self.size)
+        with self.db.lock, self.db.conn:
+            self.db.conn.execute('INSERT OR REPLACE INTO thumbnails VALUES (?,?,?,?)',
+                                 (event_id, metadata['timestamp'], canonical(metadata).decode(), jpeg))
+            self.db.conn.execute('DELETE FROM thumbnails WHERE event_id IN (SELECT event_id FROM thumbnails ORDER BY timestamp DESC,event_id DESC LIMIT -1 OFFSET ?)', (self.limit,))
+
+    @staticmethod
+    def encode(crop, mask, size=240):
         # Suppress background pixels and keep the object's connected silhouette.
         preview = crop.copy()
         preview[mask == 0] = (32, 32, 32)
-        scale = min(1., self.size / max(preview.shape[:2]))
+        scale = min(1., size / max(preview.shape[:2]))
         preview = cv2.resize(preview, (max(1, round(preview.shape[1] * scale)), max(1, round(preview.shape[0] * scale))), interpolation=cv2.INTER_AREA)
         ok, encoded = cv2.imencode('.jpg', preview, [cv2.IMWRITE_JPEG_QUALITY, 82])
         if not ok:
             raise ValueError('Thumbnail encoding failed')
-        with self.db.lock, self.db.conn:
-            self.db.conn.execute('INSERT OR REPLACE INTO thumbnails VALUES (?,?,?,?)',
-                                 (event_id, metadata['timestamp'], canonical(metadata).decode(), encoded.tobytes()))
-            self.db.conn.execute('DELETE FROM thumbnails WHERE event_id IN (SELECT event_id FROM thumbnails ORDER BY timestamp DESC,event_id DESC LIMIT -1 OFFSET ?)', (self.limit,))
+        return encoded.tobytes()
 
     def get(self, event_id):
         try:
