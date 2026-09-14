@@ -16,6 +16,7 @@ from .features.descriptor import MVSVG
 from .features.local import LocalVerifier
 from .features.quality import observation_quality
 from .network.peer import PeerNetwork
+from .metrics.live import LiveMetrics
 from .plate.matching import aggregate
 from .plate.recognizer import PlateRecognizer
 from .provenance.crypto import bytes_hash, canonical, load_private, public_text
@@ -63,6 +64,10 @@ class Runtime:
         self.metrics = {"fps": 0., "detections": 0, "raw_regions": 0, "tracks": [], "candidate_count": 0, "frames": 0,
                         "mask_fraction": 0., "shadow_fraction": 0., "error": None}
         self.log_path = Path(cfg["node"]["database"]).parent / "decisions.jsonl"
+        self.live_metrics = LiveMetrics(self.log_path.parent, self.node_id, self.descriptor.profile,
+            {key: cfg[key] for key in ('detection', 'tracking', 'features', 'lsh', 'reid')})
+        self.request_shutdown = None
+        self.observation_context = {}
         self.replay()
 
     def replay(self):
@@ -104,13 +109,16 @@ class Runtime:
 
     def log_decision(self, track, timestamp, evidence, plate, quality):
         record = {"timestamp": timestamp, "local_id": track.local_id, "global_id": track.global_id,
-                  "evidence": evidence, "plate": plate, "quality": quality, "preview_id": track.preview_id}
+                  "evidence": evidence, "plate": plate, "quality": quality, "preview_id": track.preview_id,
+                  **self.observation_context}
+        record = self.live_metrics.observation(record)
         with self.lock:
             self.events.appendleft(record)
         with self.log_path.open("a", encoding="utf-8") as stream:
             stream.write(canonical(record).decode() + "\n")
 
     def process_frame(self, frame, timestamp, warm=False, reconnect=False):
+        processing_start = time.perf_counter()
         if reconnect:
             self.detector.reset()
             self.tracker = Tracker(self.node_id, self.cfg["tracking"], self.db.get("next_track_id", 1))
@@ -186,6 +194,9 @@ class Runtime:
                 candidate_count=max((t.evidence.get("candidate_count", 0) for t in tracks), default=0),
                 frames=self.metrics["frames"] + 1, mask_fraction=float((mask > 0).mean()),
                 shadow_fraction=float((shadows > 0).mean()), error=None)
+        self.live_metrics.frame((time.perf_counter() - processing_start)*1000, warm,
+            self.tracker.candidate_count if not warm else 0,
+            sum(t.state == 'CONFIRMED' for t in tracks))
 
     def camera_loop(self):
         previous = time.monotonic()
@@ -198,6 +209,7 @@ class Runtime:
                 previous = now
             except Exception as error:
                 log.exception("Frame processing failed")
+                self.live_metrics.error()
                 with self.lock:
                     self.metrics["error"] = str(error)
 
@@ -268,3 +280,4 @@ class Runtime:
                 await asyncio.to_thread(thread.join, 7)
             if thread is None or not thread.is_alive():
                 self.db.close()
+            self.live_metrics.flush('complete' if thread is None or not thread.is_alive() else 'camera_shutdown_timeout')

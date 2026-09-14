@@ -51,6 +51,12 @@ def main():
     init.add_argument("--out", default="config/local")
     run = commands.add_parser("run", help="Run an identical camera-capable peer and monitor")
     run.add_argument("--config", default="config/local/C1.yaml")
+    video = commands.add_parser("replay", help="Process a local MP4 on one isolated node and export metrics_live.json")
+    video.add_argument("--video", required=True, help="Path to a pre-recorded local video")
+    video.add_argument("--out", help="New output directory; default creates a unique experiments/results/video-* directory")
+    video.add_argument("--config", help="Optional existing config for vision settings; LAN keys/state are not reused")
+    video.add_argument("--fps", type=float, help="Override file FPS for the video timeline (no wall-clock throttling)")
+    video.add_argument("--warmup-seconds", type=float, help="Background warmup in video seconds; default 4")
     verify = commands.add_parser("verify-ledger")
     verify.add_argument("--config", default="config/local/C1.yaml")
     demo = commands.add_parser("demo")
@@ -64,6 +70,10 @@ def main():
     evaluate = commands.add_parser("evaluate")
     evaluate.add_argument("--csv", required=True)
     evaluate.add_argument("--out", default="experiments/results/evaluation.json")
+    live = commands.add_parser("live-evaluate", help="Score independently labeled live observations after a run")
+    live.add_argument("--run-dirs", nargs="+", required=True, help="One or more data/lan/Cx/runs/UUID directories")
+    live.add_argument("--labels", required=True, help="CSV with observation_id,truth_id")
+    live.add_argument("--out", default="experiments/results/live/metrics_live.json")
     metrics = commands.add_parser("metrics", help="Offline visual research suite; writes metrics.json without starting nodes")
     metrics.add_argument("--out", default="experiments/results/research")
     inputs = metrics.add_mutually_exclusive_group()
@@ -83,13 +93,19 @@ def main():
     try:
         if args.command == "init":
             initialize(args)
+        elif args.command == "replay":
+            from .metrics.video import replay_video
+            replay_video(args.video, args.out, args.config, args.fps, args.warmup_seconds)
         elif args.command == "run":
             import uvicorn
             from .runtime import Runtime
             from .network.api import create_app
             cfg = load_config(args.config)
             runtime = Runtime(cfg)
-            uvicorn.run(create_app(runtime), host=cfg["node"]["host"], port=cfg["node"]["port"], workers=1)
+            server = uvicorn.Server(uvicorn.Config(create_app(runtime), host=cfg["node"]["host"],
+                port=cfg["node"]["port"], workers=1, proxy_headers=False))
+            runtime.request_shutdown = lambda: setattr(server, 'should_exit', True)
+            server.run()
         elif args.command == "verify-ledger":
             from .storage.database import Database
             from .provenance.ledger import Ledger
@@ -117,6 +133,10 @@ def main():
         elif args.command == "evaluate":
             from .metrics.evaluate import evaluate
             evaluate(args.csv, args.out)
+        elif args.command == "live-evaluate":
+            from .metrics.live import evaluate_live
+            report = evaluate_live(args.run_dirs, args.labels, args.out)
+            print(report['accuracy'])
         elif args.command == "metrics":
             if args.queries < 1 or args.repeats < 1 or args.identities < 2 or any(size < 5 for size in args.sizes):
                 raise ValueError("Use positive queries/repeats, identities >=2 and sizes >=5")

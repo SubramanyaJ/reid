@@ -33,6 +33,19 @@ def create_app(runtime):
         return {"observations": runtime.observation_cards(), "identities": runtime.identity_cards(),
                 "node_id": runtime.node_id}
 
+    @app.get("/api/metrics")
+    def live_metrics():
+        return runtime.live_metrics.snapshot()
+
+    @app.post("/api/shutdown")
+    def shutdown(request: Request):
+        if request.client is None or request.client.host not in ('127.0.0.1', '::1'):
+            raise HTTPException(403, 'Shutdown is available only on this machine')
+        if runtime.request_shutdown is None:
+            raise HTTPException(503, 'Managed shutdown unavailable')
+        runtime.request_shutdown()
+        return {'stopping': True, 'node_id': runtime.node_id}
+
     @app.get("/api/thumbnails/{event_id}")
     def thumbnail(event_id: str):
         data = runtime.thumbnails.get(event_id)

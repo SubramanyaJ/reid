@@ -1,5 +1,173 @@
 # Classical Multi-Camera Vehicle Re-Identification
 
+## Process a stored MP4 on one machine
+
+Use `replay` to process a local recording through the same foreground, tracking, crop, descriptor, and identity-decision code used by camera mode. No camera, SSH connection, running LAN peers, or prior `init` command is required. This mode runs in the terminal and exits at the end of the file; it does not start the web monitor.
+
+```powershell
+Set-Location E:\home\gitthings\reid
+.\.venv\Scripts\python.exe -m reid replay --video "E:\videos\recording.mp4" --out experiments/results/video-01
+```
+
+On Linux, from the project root:
+
+```bash
+.venv/bin/python -m reid replay --video "/home/sub/videos/recording.mp4" --out experiments/results/video-01
+```
+
+Replace the example video path with your file. Quote paths containing spaces. Choose a **new output directory for each run**; existing directories are rejected to protect results. Omitting `--out` creates a unique `experiments/results/video-<timestamp>-<id>` directory automatically.
+
+The output directory contains:
+
+| File | Contents |
+|---|---|
+| `metrics_live.json` | Final counts, decisions, processing times/throughput, input details, and accuracy availability |
+| `runs/<run-id>/metrics_live.json` | Preserved report compatible with camera-mode exports |
+| `runs/<run-id>/observations.jsonl` | Decisions, source frame indexes, video times, predicted IDs, and preview references |
+| `runs/<run-id>/labels.csv` | Blank identity-label template for independent annotation |
+| `replay_config.yaml`, `state.sqlite`, `key.pem` | Isolated local settings, gallery/preview state, and run key |
+
+The input metadata includes the source file's SHA-256, FPS, decoded frame count, decoded duration, processing dimensions, and number of identities in the resulting local gallery. A normal EOF finalizes `state: complete`. Ctrl+C finalizes `state: interrupted`; a processing failure finalizes `state: failed` once the runtime has initialized. An unreadable input fails promptly instead of reconnecting forever. A hard process kill retains only the most recent checkpoint.
+
+### Replay timing and optional settings
+
+Every decoded frame is processed as fast as the machine allows. Tracking, observation intervals, and background warmup use **video time**, computed as frame index divided by file FPS, rather than processing wall time. Processing FPS describes machine throughput and is distinct from the recording FPS. The timeline assumes constant frame rate; convert variable-frame-rate recordings to constant frame rate for timing-sensitive experiments. If FPS metadata is absent or incorrect, supply `--fps 30` (or the correct rate). This changes the assumed timeline; it does not throttle processing or drop frames.
+
+The default warmup is the first four **video seconds**, using the same 960×540 processing size and visual defaults as the application. Prefer a stationary-camera recording with a clear background during warmup. A clip shorter than warmup produces a report with zero evaluated frames and a warning. Override warmup when appropriate:
+
+```powershell
+.\.venv\Scripts\python.exe -m reid replay --video "E:\videos\recording.mp4" --warmup-seconds 3
+```
+
+To use the current C1 visual settings (including its optional GrabCut setting):
+
+```powershell
+.\.venv\Scripts\python.exe -m reid replay --video "E:\videos\recording.mp4" --config config/lan/C1.yaml
+```
+
+The supplied config contributes vision, retrieval, quality, and preview settings. Replay replaces its membership, camera source, database path, and key with a fresh isolated `VIDEO` node; it also clears cross-camera transitions. Existing LAN databases and identities remain untouched. `camera.fps` does not limit file replay: the file FPS or `--fps` supplies its media clock. Observation timestamps are the run epoch plus video time, not the original recording date.
+
+Performance statistics are available immediately. Re-ID precision/recall/F1 still require independently labeled physical identities; predictions cannot grade themselves. Fill the archived `labels.csv` and use `live-evaluate` as described below. Single-video scores describe within-recording identity consistency, not cross-camera accuracy; box/mask IoU and ranked mAP require the separately labeled evaluation inputs described in the research-suite section.
+
+## Run the existing three-node LAN setup
+
+Use this section for the machines already configured in this project. **Do not run `reid init` again.** The later provisioning section is only for a new, separate installation.
+
+| Node | Machine and project root | Config on that machine | Monitor |
+|---|---|---|---|
+| C1 | Local Windows: `E:\home\gitthings\reid` | `config/lan/C1.yaml` | http://10.78.223.22:9000 |
+| C2 | `sub@10.78.223.1`: `/home/sub/reid` | `config/lan/C2.yaml` | http://10.78.223.1:9000 |
+| C3 | `sub@10.78.223.84`: `/home/sub/reid` | `config/lan/C3.yaml` | http://10.78.223.84:9000 |
+
+The configured C1 address is **10.78.223.22**. The older `10.78.233.22` address was a typo. Each machine uses port **9000**; ports 9001/9002 belong to the separate single-machine smoke setup.
+
+### 1. Before starting
+
+Turn on C2 and C3, join the same LAN, and ensure the three listed IP addresses are still assigned. Each machine needs its own installed Python environment, its own existing config/key, and the same application version. For the new live metrics and graceful shutdown, update **`src/` and `scripts/` on each machine** from this revision; preserve that machine's `config/lan/`, `data/`, and `.venv/`. With the existing editable install, Python source changes take effect at restart. Do not copy the Windows virtual environment to Linux.
+
+Current camera choices are C1 `source: 1`, C2 `source: 0`, and C3 `source: null`. Thus the existing deployment has **three nodes and two enabled cameras**. To use a camera on C3, edit `/home/sub/reid/config/lan/C3.yaml` on C3 and set `camera.source` to its actual device index or stream URL before starting. `null` is valid for a peer without a camera.
+
+On Windows, check connectivity (these commands do not start nodes):
+
+```powershell
+Set-Location E:\home\gitthings\reid
+ssh -o BatchMode=yes -o ConnectTimeout=10 sub@10.78.223.1 'cd ~/reid && .venv/bin/python -m reid --help'
+ssh -o BatchMode=yes -o ConnectTimeout=10 sub@10.78.223.84 'cd ~/reid && .venv/bin/python -m reid --help'
+```
+
+### 2. Start all three from local PowerShell
+
+```powershell
+Set-Location E:\home\gitthings\reid
+.\scripts\lan_cluster.ps1 start
+```
+
+Wait for startup, then inspect all nodes:
+
+```powershell
+.\scripts\lan_cluster.ps1 status
+```
+
+Open http://10.78.223.22:9000/ and the other monitors in the table. Camera nodes need about four seconds of background warmup; keep the scene clear during this period. A camera-less C3 can be healthy while its frame panel remains empty. The helper starts detached processes, so closing PowerShell or SSH does not stop them.
+
+If PowerShell blocks the script, use this per-invocation command:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\lan_cluster.ps1 start
+```
+
+### 3. Stop all three and collect metrics
+
+```powershell
+.\scripts\lan_cluster.ps1 stop
+```
+
+The updated helper first requests graceful shutdown over each machine's loopback interface, allowing camera cleanup and final metric export. If this fails, it falls back to process termination; the last checkpoint survives but may say `running`. `state: complete` means normal shutdown, not that accuracy has been independently established. The controller attempts all three hosts even if one fails, then reports failures. A machine that is powered off cannot be contacted.
+
+Every node writes these files beside its configured database:
+
+```text
+data/lan/C1/metrics_live.json                  latest run (C2/C3 on those nodes)
+data/lan/C1/runs/<run-id>/metrics_live.json    preserved per-run report
+data/lan/C1/runs/<run-id>/observations.jsonl   decisions with unique observation IDs
+data/lan/C1/runs/<run-id>/labels.csv           observation_id,truth_id template
+data/lan/C1/peer.log                         managed process log
+```
+
+Metrics are written at initialization, checkpointed during frame processing at approximately five-second intervals, and finalized at normal shutdown. Performance counts include frames, warmup, admitted candidate boxes, confirmed track-frames, errors, and decision categories. Processing mean/min/max time and throughput are measured; accuracy fields are `null` until independent labels exist. Remote nodes need the updated code to produce these files. No real camera run was performed merely to demonstrate this export.
+
+To copy preserved remote runs after an experiment, choose a new collection directory each time:
+
+```powershell
+New-Item -ItemType Directory -Force experiments/collected/session-01/C2,experiments/collected/session-01/C3
+scp -r sub@10.78.223.1:~/reid/data/lan/C2/runs experiments/collected/session-01/C2/
+scp -r sub@10.78.223.84:~/reid/data/lan/C3/runs experiments/collected/session-01/C3/
+```
+
+### Run just one node, or troubleshoot
+
+Use one of the following instead of the cluster start command:
+
+```powershell
+# Local C1, managed background process
+.\.venv\Scripts\python.exe scripts/lan_node.py start --node C1
+# Remote C2
+ssh sub@10.78.223.1 'cd ~/reid && .venv/bin/python scripts/lan_node.py start --node C2'
+# Remote C3
+ssh sub@10.78.223.84 'cd ~/reid && .venv/bin/python scripts/lan_node.py start --node C3'
+```
+
+Replace `start` with `status` or `stop` to control that node. For a foreground debugging session, first stop its managed process, then run `python -m reid run --config config/lan/Cx.yaml` with that machine's environment and node ID; Ctrl+C ends the run and exports metrics.
+
+| Symptom | Check |
+|---|---|
+| SSH timeout | Remote power, LAN address, route, and SSH service. The controller does not power on computers. |
+| Status is null | Read `data/lan/Cx/peer.log` on that host; check its `.venv`, config path, and startup error. |
+| Local monitor works, peers unavailable | TCP 9000 must be reachable between hosts; check firewalls and `members[].url`. `node.host: 0.0.0.0` binds interfaces; it is not a peer address. |
+| Camera has no image | Check `camera.source`, device permission, and whether another program owns the camera; `null` intentionally disables it. |
+| Port already occupied | Stop the existing managed/foreground copy before starting another. |
+| Identity state differs | Wait for peer synchronization and inspect errors; preserve the existing keys and databases. |
+| IP addresses changed | Membership URLs define the existing deployment. Use its original addresses, or deliberately provision a separate configuration/database set as described below; do not edit one member list alone. |
+
+For local logs: `Get-Content data/lan/C1/peer.log -Tail 50`. For C2: `ssh sub@10.78.223.1 'tail -n 50 ~/reid/data/lan/C2/peer.log'`.
+
+### Obtain actual live Re-ID accuracy
+
+After stopping, fill the `truth_id` column in each run's `labels.csv` using independently observed physical identities. The same real object must have the same truth label across cameras. Do not copy predicted `global_id` values into truth labels. Keep synchronized source recordings or independent observer notes so labels can be checked: the application does **not** automatically record full video, and its thumbnail cache is bounded. `observations.jsonl` provides timestamps, local IDs, prediction evidence, and preview references for annotation.
+
+Combine the desired runs' label rows into one CSV with a single header. Then score the selected archives; substitute actual run IDs and collected paths below:
+
+```powershell
+.\.venv\Scripts\python.exe -m reid live-evaluate `
+  --run-dirs data/lan/C1/runs/<C1-run-id> experiments/collected/session-01/C2/runs/<C2-run-id> `
+  --labels experiments/collected/session-01/labels.csv `
+  --out experiments/results/live-session-01/metrics_live.json
+```
+
+The annotated report contains pairwise identity precision/recall/F1, cross-camera pairwise scores, annotation coverage, and resolution coverage. It scores resolved annotated observations and keeps abstentions visible through coverage; it is **not** rank-1, mAP, IDF1, or MOTA. Repeated frames are correlated, so these pairs should not be interpreted as independent statistical samples. Blank truth labels are excluded, an entirely blank template is rejected, and partial annotation coverage is reported. Run directories are preserved. For actual box/mask and ranked-retrieval accuracy, use the labeled frame/crop inputs of the offline research suite described below.
+
+
+
 A runnable research MVP that associates moving vehicle observations across independent cameras using classical vision, a handcrafted descriptor, random-hyperplane LSH, font-template plate recognition, and soft contextual evidence. Identical Python peers replicate signed identity-event provenance through a majority-certificate ledger. A peer may process a camera or run solely as a consortium participant.
 
 **Implementation status:** the MVP has been deployed on three LAN peers with two live cameras. The whole-object filtering and thumbnail update includes regression tests for isolated fingers, connected hand silhouettes, nearby-object separation, size/foreground gates, component-specific crops, preview retention, and API references. Live operation checks establish that the software runs and replicates signed events; they do not establish hand/vehicle recognition accuracy. See `LAN-RUNBOOK.md` for this deployment’s start/stop commands and camera indices.
@@ -68,7 +236,7 @@ Use Python 3.10 or newer; Python 3.11/3.12 is a sensible starting environment. O
 Run from a clone/copy of this repository; change the first path if your checkout differs.
 
 ```bash
-cd ~/gitthings/reid
+cd ~/reid
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -105,7 +273,7 @@ If local policy blocks activation, invoke the environment directly; activation i
 
 Do not run multiple Uvicorn workers against one node database. The CLI explicitly uses one worker. To stop a node, press Ctrl+C in its terminal.
 
-## 3. Provisioning peers
+## 3. Provisioning a new deployment (skip for the existing LAN)
 
 ### Three local peers for a first smoke check
 
@@ -135,7 +303,7 @@ Open the local monitors:
 
 With no camera and no events, a healthy chain remains at genesis (height zero). Nodes do not generate empty blocks to animate the UI. Configure cameras to produce real observations, or run the independent offline demonstration below.
 
-### Three laptops on a LAN
+### New LAN deployment on different machines
 
 Provision this example **once**, with the actual laptop IP addresses substituted, then distribute the resulting files:
 
@@ -414,7 +582,7 @@ The demo renders moving vehicle-like objects in two synthetic fixed cameras and 
 Linux:
 
 ```bash
-cd ~/gitthings/reid
+cd ~/reid
 source .venv/bin/activate
 python -m reid demo --out experiments/results/demo
 python -m reid evaluate --csv experiments/results/demo/observations.csv --out experiments/results/demo/reid_metrics.json
@@ -438,7 +606,7 @@ The demo reports outcomes even if detections or cross-camera matches fail. It do
 Linux:
 
 ```bash
-cd ~/gitthings/reid
+cd ~/reid
 source .venv/bin/activate
 python -m pytest -q
 ```
@@ -553,7 +721,7 @@ Future classical work can improve motion-aware fragment handling, multi-hypothes
 
 ## 15. Paper and reproducible visual metrics
 
-The visual-method paper is in [`paper.org`](paper.org). It contains 15 recent research papers, 11 supporting references, 24 explained equations, and measured local results. It focuses on foreground support, bounding, masked descriptors, hashing, and retrieval. The reference attachment contained only a cropped evaluation subsection; the matching visible hierarchy and the reconstructed conventional main headings are identified in an Org comment.
+The final visual-method manuscript is [`main.tex`](main.tex), using the five-section structure of the full supplied reference PDF. It contains 15 recent research papers and 11 supporting references, 20 numbered equation groups, a pipeline algorithm, six tables, and three figures. It focuses on foreground support, bounding, masked descriptors, hashing, and retrieval. [`paper.org`](paper.org) retains the earlier working draft and an appended explanation of test provenance, synthetic evaluation, and published precedents.
 
 Run the extended suite without starting any camera or node:
 
@@ -565,3 +733,14 @@ Set-Location E:\home\gitthings\reid
 The same `python -m reid metrics` command works on Linux after activating its environment. Use a new output directory each time. Outputs include `metrics.json`, per-query `queries.csv`, retrieval plots, and descriptor ablations. No new dependencies are required. [`experiments/RESEARCH.md`](experiments/RESEARCH.md) explains all metrics, timing/ground-truth conventions, real crop and frame manifests, and NPZ input. Run `python -m pytest -q` for the regression suite.
 
 The archived paper run is `experiments/results/paper-local-20260914`. It uses generated data and cannot establish real multi-camera Re-ID accuracy. It reports both the larger-vector LSH speed advantage and the small image-gallery case where exhaustive search is faster. Unknown-object threshold failures and unfavorable descriptor ablations remain in the paper. The local defaults and C1 YAML now have stricter minimum and maximum box limits; no remote hosts were modified or started.
+
+## Build the final paper
+
+`main.tex` is the final manuscript, organized using the supplied full reference PDF. Its existing author block is preserved. `paper_figures/` contains its two figure assets; keep that directory beside the TEX file. Compile from the project root with a LaTeX installation containing IEEEtran, the standard AMS/algorithm packages, microtype, xurl, and balance:
+
+```text
+pdflatex -interaction=nonstopmode -halt-on-error main.tex
+pdflatex -interaction=nonstopmode -halt-on-error main.tex
+```
+
+No BibTeX step is needed because the 26 references are included in `main.tex`. The compiled preview was checked as a nine-page, two-column paper. `paper.org` retains the working draft and now ends with a detailed test-provenance appendix, reproduction instructions, and short quotations from published evaluation precedents. The archived tables describe generated inputs, not measurements from live LAN footage.

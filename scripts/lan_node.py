@@ -79,7 +79,22 @@ def main():
             return
         if args.action == 'stop':
             if alive:
-                os.kill(record['pid'], signal.SIGTERM)
+                # Let the lifespan handler flush final metrics and close the camera.
+                # Windows SIGTERM terminates immediately, so try HTTP first.
+                current = status()
+                if current:
+                    try:
+                        response = client.post(url + '/api/shutdown')
+                        response.raise_for_status()
+                        for _ in range(120):
+                            if birth_token(record['pid']) != record['birth_token']:
+                                break
+                            time.sleep(.1)
+                    except httpx.HTTPError:
+                        pass
+                if birth_token(record['pid']) == record['birth_token']:
+                    print('Graceful shutdown unavailable/timed out; stopping process. Last metrics checkpoint is retained.')
+                    os.kill(record['pid'], signal.SIGTERM)
                 for _ in range(50):
                     if birth_token(record['pid']) != record['birth_token']:
                         break

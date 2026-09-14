@@ -1,6 +1,6 @@
 # Running this three-machine LAN deployment
 
-Configured on 2026-09-13. All three peers run the same application as background processes. C1 uses color camera index `1`, C2 uses integrated camera index `0`, and C3 remains peer-only (`source: null`). They remain running when the launching terminal or SSH connection closes. They are not installed as boot-time services.
+Configured on 2026-09-13; instructions updated 2026-09-14. See the beginning of README.md for the complete current quickstart and live evaluation instructions. All three peers run the same application as background processes. C1 uses color camera index `1`, C2 uses integrated camera index `0`, and C3 remains peer-only (`source: null`). They remain running when the launching terminal or SSH connection closes. They are not installed as boot-time services.
 
 | Node | Host | Project | Monitor |
 |---|---|---|---|
@@ -21,7 +21,7 @@ Set-Location E:\home\gitthings\reid
 .\scripts\lan_cluster.ps1 stop
 ```
 
-Run only the action you want. `start` is idempotent when the node is already serving its expected port. The scripts use the existing SSH keys for the two remote peers. `stop` targets only the recorded managed process and checks its OS creation token to avoid terminating an unrelated process after PID reuse. Linux uses SIGTERM; Windows terminates the detached process. SQLite uses transactional recovery. To restart after changing configuration, stop and then start.
+Run only the action you want. `start` is idempotent when the node is already serving its expected port. The scripts use the existing SSH keys for the two remote peers. `stop` targets only the recorded managed process and checks its OS creation token to avoid terminating an unrelated process after PID reuse. Updated nodes first receive a loopback-only graceful shutdown request to flush metrics and close the camera. The helper waits up to 12 seconds, then falls back to SIGTERM if necessary; on Windows that fallback is immediate termination. The last metric checkpoint remains available after a forced stop. Update src/ and scripts/ on the remote hosts to enable this behavior there. To restart after changing configuration, stop and then start.
 
 The cluster helper is specific to these three host addresses. The Re-ID application and consensus membership remain configurable for arbitrary node counts.
 
@@ -99,3 +99,7 @@ C1's actual color-camera index is `1`; index `0` produced an essentially graysca
 To change a source, edit the relevant node's own YAML on its host, then restart that node with the helper. For DroidCam/RTSP use the actual stream URL. Keep C3 at `source: null` if it is a peer-only laptop. A camera index refers to the laptop running that node. Keep cameras stationary during background warm-up and point them at the intended observation area. See the main README for camera configuration and limitations.
 
 The consensus protocol has no view-change mechanism: it stalls if the scheduled proposer is offline, even when the other two machines remain reachable. This is an existing MVP limitation, not a sign that the startup helper failed.
+
+## Per-run metrics
+
+Every updated node writes `metrics_live.json` beside its database and preserves `runs/<run-id>/metrics_live.json`, `observations.jsonl`, and `labels.csv`. Normal shutdown finalizes the report. Accuracy requires independent labels; follow the README `live-evaluate` instructions. C3 remains camera-less until its camera source is configured.

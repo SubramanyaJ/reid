@@ -62,23 +62,23 @@ ByteTrack [15] illustrates how discarding weak detections can fragment trajector
 
 #+CAPTION: Recent literature and its specific relationship to this study. The final column is a design comparison, not a reproduced numerical result.
 #+ATTR_LATEX: :environment longtable :align p{0.07\linewidth}p{0.22\linewidth}p{0.29\linewidth}p{0.32\linewidth}
-| Ref. | Work / year | Main mechanism | Relevance and comparison boundary |
-|------+-------------+----------------+-----------------------------------|
-| [1] | TransReID / 2021 | Transformer, patch and side information | Rich learned appearance; our vector keeps camera metadata separate |
-| [2] | GiT / 2023 | Local graphs and global transformer | Local/global complementarity; our blocks use fixed operators |
-| [3] | SSBVER / 2023 | Self-supervised representation improvement | Deployment cost matters alongside accuracy |
-| [4] | Day–night Re-ID / 2024 | Glare suppression and domain modulation | Illumination changes require dedicated validation |
-| [5] | VehicleMAE / 2025 | Vehicle-oriented masked pretraining | Learned view robustness is outside our implementation |
-| [6] | CAViT / 2022 | Temporal feature alignment | Persistence alone does not provide aligned video features |
-| [7] | Synthehicle / 2023 | Annotated synthetic multi-camera scenes | Stronger benchmark than simple analytic fixtures |
-| [8] | Modality generalization / 2023 | Meta-learning across visual modalities | RGB-to-IR robustness is not established here |
-| [9] | Yi et al. survey / 2025 | Taxonomy of vehicle Re-ID approaches | Frames the gap between handcrafted and learned methods |
-| [10] | DB-LSH / 2022 | Dynamic query-centered buckets | Static LSH boundaries and storage deserve measurement |
-| [11] | SPANN / 2021 | Memory/disk inverted index | Different scale and storage architecture |
-| [12] | ANN challenge / 2022 | Recall/performance/hardware comparison | Motivates matched protocols and explicit resource reporting |
-| [13] | Window-filtered ANN / 2024 | Search subject to metadata ranges | Filtering must be identical for both search methods |
-| [14] | SPFresh / 2023 | Incremental index rebalancing | Update cost is separate from query cost |
-| [15] | ByteTrack / 2022 | Association of weaker detections | Conservative rejection can increase missed tracks |
+| Ref. | Work / year                    | Main mechanism                             | Relevance and comparison boundary                                  |
+|------+--------------------------------+--------------------------------------------+--------------------------------------------------------------------|
+| [1]  | TransReID / 2021               | Transformer, patch and side information    | Rich learned appearance; our vector keeps camera metadata separate |
+| [2]  | GiT / 2023                     | Local graphs and global transformer        | Local/global complementarity; our blocks use fixed operators       |
+| [3]  | SSBVER / 2023                  | Self-supervised representation improvement | Deployment cost matters alongside accuracy                         |
+| [4]  | Day–night Re-ID / 2024         | Glare suppression and domain modulation    | Illumination changes require dedicated validation                  |
+| [5]  | VehicleMAE / 2025              | Vehicle-oriented masked pretraining        | Learned view robustness is outside our implementation              |
+| [6]  | CAViT / 2022                   | Temporal feature alignment                 | Persistence alone does not provide aligned video features          |
+| [7]  | Synthehicle / 2023             | Annotated synthetic multi-camera scenes    | Stronger benchmark than simple analytic fixtures                   |
+| [8]  | Modality generalization / 2023 | Meta-learning across visual modalities     | RGB-to-IR robustness is not established here                       |
+| [9]  | Yi et al. survey / 2025        | Taxonomy of vehicle Re-ID approaches       | Frames the gap between handcrafted and learned methods             |
+| [10] | DB-LSH / 2022                  | Dynamic query-centered buckets             | Static LSH boundaries and storage deserve measurement              |
+| [11] | SPANN / 2021                   | Memory/disk inverted index                 | Different scale and storage architecture                           |
+| [12] | ANN challenge / 2022           | Recall/performance/hardware comparison     | Motivates matched protocols and explicit resource reporting        |
+| [13] | Window-filtered ANN / 2024     | Search subject to metadata ranges          | Filtering must be identical for both search methods                |
+| [14] | SPFresh / 2023                 | Incremental index rebalancing              | Update cost is separate from query cost                            |
+| [15] | ByteTrack / 2022               | Association of weaker detections           | Conservative rejection can increase missed tracks                  |
 
 The gap addressed here is a reproducible account of the complete classical visual path: what is observed, what enters the descriptor, how indexing approximates search, and where failures occur. This is narrower than claiming a new best vehicle-recognition model. The comparison table also explains why importing published accuracy or speed numbers from other datasets would be an invalid quantitative comparison.
 
@@ -217,13 +217,13 @@ A severe low-fill, clipped, or undersized crop multiplies \(q_0\) by 0.3; an exp
 MVSV-G maps the crop and mask to a fixed-dimensional numerical embedding. “Embedding” here denotes a deterministic feature map, not a neural model. The crop is resized with aspect ratio preserved and letterboxed to 128×80. Image resizing uses area interpolation and the binary mask uses nearest-neighbor interpolation. Masked statistics omit padding. Texture and gradient calculations use a 7×7 eroded interior mask, falling back to the original mask if fewer than ten pixels remain.
 
 #+CAPTION: Exact dimensional decomposition of the descriptor implemented in the project.
-| Block | Values | Construction |
-|-------+--------+--------------|
-| Color | 180 | Three regional HSV/Lab histograms (156), coarse Lab mean/std (24) |
-| Texture | 54 | Three radii × (10 uniform-LBP bins + 8 variance bins) |
-| Structure | 332 | Gradient cells (288), edge statistics (10), silhouette and projections (34) |
-| Statistics | 36 | Channel moments (18), covariance terms (15), three shape/gradient values |
-| Total | 602 | Independently normalized blocks, weighted concatenation, final normalization |
+| Block      | Values | Construction                                                                 |
+|------------+--------+------------------------------------------------------------------------------|
+| Color      |    180 | Three regional HSV/Lab histograms (156), coarse Lab mean/std (24)            |
+| Texture    |     54 | Three radii × (10 uniform-LBP bins + 8 variance bins)                        |
+| Structure  |    332 | Gradient cells (288), edge statistics (10), silhouette and projections (34)  |
+| Statistics |     36 | Channel moments (18), covariance terms (15), three shape/gradient values     |
+| Total      |    602 | Independently normalized blocks, weighted concatenation, final normalization |
 
 ** B. Color and Regional Statistics
 
@@ -485,13 +485,13 @@ The tightened gates preserve the two targets in this fixture. Regression tests s
 ** D. Exhaustive Search versus LSH
 
 #+CAPTION: Default LSH (8 tables, 12 bits, radius 1) versus exhaustive cosine. Times are means of three seed-level medians. CRF is mean candidate fraction; NN1 is exact nearest-neighbor inclusion. Gaussian identities are artificial labels.
-| Input | N | Scan ms | LSH ms | Speedup | CRF | NN1 | LSH mAP |
-|-------+---+---------+--------+---------+-----+-----+---------|
-| Gaussian | 100 | 0.0095 | 0.0441 | 0.22 | 0.0710 | 0.9667 | 0.9573 |
-| Gaussian | 1000 | 0.0356 | 0.0510 | 0.70 | 0.0300 | 0.9633 | 0.9547 |
-| Gaussian | 5000 | 0.2976 | 0.1033 | 2.88 | 0.0270 | 0.9667 | 0.9487 |
-| Gaussian | 10000 | 1.0805 | 0.2267 | 4.77 | 0.0263 | 0.9833 | 0.9527 |
-| Rendered MVSV-G | 192 | 0.0130 | 0.0757 | 0.17 | 0.8424 | 0.9958 | 0.5942 |
+| Input           |     N | Scan ms | LSH ms | Speedup |    CRF |    NN1 | LSH mAP |
+|-----------------+-------+---------+--------+---------+--------+--------+---------|
+| Gaussian        |   100 |  0.0095 | 0.0441 |    0.22 | 0.0710 | 0.9667 |  0.9573 |
+| Gaussian        |  1000 |  0.0356 | 0.0510 |    0.70 | 0.0300 | 0.9633 |  0.9547 |
+| Gaussian        |  5000 |  0.2976 | 0.1033 |    2.88 | 0.0270 | 0.9667 |  0.9487 |
+| Gaussian        | 10000 |  1.0805 | 0.2267 |    4.77 | 0.0263 | 0.9833 |  0.9527 |
+| Rendered MVSV-G |   192 |  0.0130 | 0.0757 |    0.17 | 0.8424 | 0.9958 |  0.5942 |
 
 On the 10,000-vector Gaussian diagnostic, the default index verifies about 2.63% of gallery descriptors, a 97.37% reduction in exact comparisons, with a 4.77-fold aggregate latency improvement. Seed-specific speedups range from 4.74 to 4.79. Exact top-1 inclusion averages 0.9833, while identity Rank-1 remains 1.0000 because another descriptor of the same generated identity can replace a missed nearest exemplar. Exhaustive mAP is 1.0000 on these constructed clusters; default LSH mAP is 0.9527. Faster search therefore retains a measurable approximation cost.
 
@@ -642,3 +642,117 @@ The local study supports a conditional LSH speed advantage on larger clustered v
 [25] SciPy, “linear_sum_assignment,” official API documentation, accessed 13 September 2026. [[https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html][API documentation]].
 
 [26] NumPy, “Global Configuration Options,” official documentation, accessed 13 September 2026. [[https://numpy.org/doc/stable/reference/global_state.html][Thread and runtime configuration]].
+
+* APPENDIX: TEST PROVENANCE, INTERPRETATION, AND FIELD EVALUATION
+:PROPERTIES:
+:CUSTOM_ID: test-provenance-20260914
+:END:
+
+Added 14 September 2026 after inspecting the complete reference PDF, /Adaptive Contour GrabCut: An Algorithmic Approach for Robust Human Image Segmentation/. The final manuscript is =main.tex=. It now follows that document's five principal headings: Introduction; Related Work; Proposed Methodology; Experimental Results; Conclusion and Future Work. Its experimental subsections are Experimental Setup, Quantitative Results, Qualitative Analysis, Runtime Performance, and Discussion. This supersedes the earlier structural inference from the isolated screenshot. The existing Org draft is retained as working material rather than silently replaced.
+
+** Were the earlier experiments simulations?
+
+Yes, their /inputs/ were generated. The measurements were obtained by executing the implemented Python/OpenCV/NumPy code on this local computer. They were not invented numbers, estimates from a complexity equation, or measurements collected from the three LAN cameras. There were three distinct experiments:
+
+| Experiment | What was generated | What actually executed | What its evidence supports |
+|------------+--------------------+------------------------+----------------------------|
+| Motion replay | Two moving vehicle drawings, background, thin negative distractor, exact masks and boxes | Actual foreground model, cleanup, geometry gates, tracker, crop quality, descriptor extraction | Behavior on known motion/support; confirmation delay; visual-stage processing cost |
+| Appearance retrieval | Identity-specific 2-D crops under translation, brightness, noise, blur | Actual MVSV-G extraction, exhaustive and LSH retrieval, descriptor ablations | Discrimination under those perturbations and real index behavior on those descriptors |
+| Search scaling | Normalized noisy clusters in 602 dimensions | Actual projection, hash tables, candidate union, cosine scoring, top-10 selection | Search time/recall/storage tradeoffs for that vector distribution |
+
+The motion replay contains 80 warmup frames and 100 scored frames at 640 by 360 pixels, with two targets per scored frame. The 200 boxes are 200 /object-frame instances/, not 200 independent physical identities. The appearance test contains 64 known identities, three gallery variants each (192 descriptors), 64 held-out known queries, and 16 unknown queries. A “view” in the generator is a perturbed 2-D drawing; it is not a different physical camera viewpoint. The vector diagnostic has 100 queries per size, five gallery samples per generated identity, and galleries of 100, 1,000, 5,000, and 10,000 vectors. Different sizes are generated separately rather than being a nested acquisition sequence.
+
+** Exact implementation and reproduction path
+
+The entry point =python -m reid metrics= calls =src/reid/metrics/research.py=. Data generation/loading resides in =datasets.py=; paired search measurement is in =retrieval.py=; frame replay is in =vision.py=; matching, ranking, distributions, and conditional bootstrap helpers are in =measures.py=. The reported archive is:
+
+#+begin_example
+experiments/results/paper-local-20260914/
+  metrics.json
+  queries.csv
+  rendered-descriptors.npz
+  retrieval.png
+  descriptor-ablation.png
+#+end_example
+
+Its =metrics.json= creation time is =2026-09-13T18:33:31.310903+00:00=, equivalent to 14 September in India. Its SHA-256 is =a1cb30f36010660cb256c949f8143a4f8dcc99587ce2b6cc549eaa493abca8a8=. The archive records source fingerprints and environment information; the later live-export additions do not retroactively change the historical run. The original measurements have been preserved, not overwritten by a new instrumented run.
+
+To reproduce the offline protocol locally, use a fresh output directory:
+
+#+begin_src powershell
+Set-Location E:\home\gitthings\reid
+.\.venv\Scripts\python.exe -m reid metrics `
+  --out experiments/results/reproduction-01 `
+  --sizes 100 1000 5000 10000 --queries 100 --identities 64 `
+  --seeds 17 29 43 --data-seed 2026 --repeats 5
+#+end_src
+
+The command opens neither camera devices nor network peers. Generated inputs and accuracy should reproduce under the same numerical environment; wall-clock timings can change with hardware, load, thermal conditions, and library versions. The CLI sets BLAS thread variables before importing NumPy; the runner sets OpenCV to one thread. No GPU or remote-node measurement is involved.
+
+For each fixed gallery/query set, all methods receive the same vectors and exclusions. Self-samples are excluded by sample identifier. Optional =--cross-camera= also excludes all gallery rows from the query camera. Five untimed query warmups precede repeated timings; method order is shuffled and interleaved. A query's reported time is the median of five repetitions. The paper averages seed-level medians across the three plane seeds and averages the corresponding speed ratios. Raw repetitions remain in =queries.csv= so summaries can be independently recomputed.
+
+The timed region includes LSH projection, probing, set union, filtering, exact scoring, and bounded top-10 selection. Full ranking for AP is outside that region. Missed positive candidates remain in the AP denominator. There is no hidden exhaustive fallback that repairs empty LSH results. Unknown queries are excluded from closed-set mAP and reported separately. These choices prevent rewarding LSH for silently dropping difficult positives or comparing different timed tasks.
+
+** Why these tests are useful, and what “trust” means here
+
+Their strongest justification is /controlled, falsifiable measurement/. The implementation receives specified inputs, an independent generator provides exact geometric/identity labels, and the output can be recomputed. Exhaustive cosine search also supplies an algorithmic reference for the nearest descriptor. If LSH misses that descriptor, the miss is counted regardless of whether another candidate happens to share its generated identity. Unit tests separately exercise hand-core preservation, fragment rejection, geometry bounds, ranking exclusions, and metric denominators.
+
+Trust in these results is therefore scoped. The 4.77-fold speedup is a measured local comparison for 10,000 clustered vectors, including index-query overhead. It is useful evidence that the implementation can reduce search work in this regime. It does not establish a 4.77-fold improvement in whole-application frame rate or in all image galleries. The rendered-descriptor test supplies a countercheck: its concentrated buckets retain 84.24 percent of gallery rows, and an exhaustive scan is about 5.8 times faster. Retaining this result makes the efficiency claim more credible and gives an actionable selection criterion.
+
+Similarly, the mask IoU of 0.7405 and confirmed-box F1 of 0.9744 describe the two-object replay. Ten false negatives arise during track confirmation. Zero switches on separated drawings cannot demonstrate robust crowded-scene tracking. Both old and tightened box policies obtain the same scores on this sequence, so a measured precision improvement from tightening is not claimed. The separate shape tests establish that invalid fragments are rejected under their specified dimensions.
+
+The color ablation improves mAP from 0.5962 to 0.7087 on the generated brightness perturbation. This is a useful diagnosis of the representation, not proof that removing color improves every camera dataset. All 16 unknown crop queries pass the diagnostic cosine threshold of 0.82, exposing a need for open-set calibration. That isolated threshold test does not evaluate the application's complete live identity-fusion behavior.
+
+Query bootstrap intervals in the archive quantify uncertainty conditional on the fixed generator and index seed. They cannot estimate variation over real installations, weather, cameras, or independently acquired identities. Repeated timings and neighboring video frames do not create new independent scenes. The appropriate next step is a held-out real-data experiment, not inflating the number of synthetic repetitions and calling the result field accuracy.
+
+** Published precedents and exact supporting quotations
+
+These are precedents for /types of evaluation and reporting/. None uses our exact drawing generator, and none certifies this implementation. Citations [7], [12], and [20] refer to the existing bibliography above.
+
+1. Herzog et al., /Synthehicle/ [7], author manuscript abstract (2022; WACV Workshops publication 2023), explicitly describes “a massive synthetic dataset” and states:
+
+   #+begin_quote
+   We provide baselines for detection, vehicle re-identification, and single- and multi-camera tracking.
+   #+end_quote
+
+   [[https://arxiv.org/abs/2208.14167][Primary source: Synthehicle abstract]]. This supports the legitimacy of explicitly labeled synthetic evaluation for these tasks. Synthehicle uses a much richer virtual-city dataset; our small 2-D fixtures support narrower claims. We did not run Synthehicle or inherit its accuracy results.
+
+2. Lv et al., /Multi-Probe LSH/ [20], Section 5.3, identifies the evaluation dimensions as:
+
+   #+begin_quote
+   search quality, search speed, and space requirement
+   #+end_quote
+
+   Section 5.4 states:
+
+   #+begin_quote
+   we have also implemented the brute-force method
+   #+end_quote
+
+   [[https://www.vldb.org/conf/2007/papers/research/p950-lv.pdf][Primary source: VLDB 2007 paper, printed page 956]]. This supports comparison against an exact scan and joint recall/time/memory reporting. Their evaluation uses real image/audio feature datasets and a different LSH distance family and implementation. It is not a precedent for claiming that our Gaussian vectors are real vehicle descriptors.
+
+3. Simhadri et al., the NeurIPS ANN challenge report [12], abstract, states that the competition:
+
+   #+begin_quote
+   compares ANNS algorithms at billion-scale by hardware cost, accuracy and performance.
+   #+end_quote
+
+   [[https://proceedings.mlr.press/v176/simhadri22a.html][Primary source: PMLR 176, 2022]]. This supports the multi-objective benchmarking approach. Our experiment is far smaller and reports measured query performance and estimated index storage, not billion-scale capability or hardware-cost superiority.
+
+** What should the final paper disclose?
+
+The synthetic origin belongs in the abstract where the headline results are introduced, in Experimental Setup with exact sizes and perturbations, in captions where generated scenes are shown, and in one focused discussion of external validity. The manuscript does this. It leads with the implementation and measured contributions and uses the limitations to motivate concrete next steps; it does not repeatedly apologize for using a controlled experiment. Omitting the origin would allow a reader to mistake a generated benchmark for a real multi-camera deployment, materially changing the meaning of the claims.
+
+This is a valid engineering baseline and controlled evaluation. It is not yet a real-camera validation study. Published precedent supports synthetic benchmarking when honestly described; acceptance by a particular venue still depends on novelty, evidence depth, and its criteria.
+
+** How the new live export supports the next experiment
+
+Each =reid run= now initializes =metrics_live.json= beside the configured database and preserves a unique =runs/<run-id>/= archive. Successful frame processing updates counts and timing summaries; frame-triggered checkpoints occur approximately every five seconds, and normal shutdown writes a final report. The managed stop helper first requests a loopback-only graceful shutdown. A hard kill or power loss can leave the latest checkpoint marked =running=; it must not be described as a complete run.
+
+=observations.jsonl= records unique observation IDs, camera IDs, timestamps, predicted identities, and evidence. =labels.csv= supplies blank truth-label cells for eligible observations. A human must label physical identity using independently retained recordings or observation notes; the bounded preview cache is not a permanent dataset. The software does not silently manufacture truth from its own predictions.
+
+=python -m reid live-evaluate --run-dirs ... --labels ... --out .../metrics_live.json= joins those labels with preserved predictions. It reports pairwise TP/FP/FN/TN, precision/recall/F1, cross-camera pairwise results, and both annotation and resolution coverage. Scores are conditional on resolved labeled observations; abstentions are reflected in coverage. An uncertain or quality-skipped observation does not become a resolved match merely because its track retains an older global ID. Pairwise scores are not rank-1, mAP, IDF1, or MOTA, and correlated observation pairs are not independent samples.
+
+Box/mask accuracy requires separately annotated frames and pixel masks. Ranked retrieval needs eligible gallery/query labels and rankings. The existing =--frames-manifest= and =--crops= research inputs provide those evaluation paths. Until that evidence is supplied, corresponding live accuracy fields remain =null= with an explanation. This is preferable to exporting plausible-looking but unsupported percentages.
+
+For a field study, record camera placements and source settings, synchronize clocks, define physical identities independently, retain difficult negatives and unknown objects, and separate calibration identities/sequences from the held-out test set. Record per-camera results and cross-camera results, sample sizes, labeling coverage, and the time boundary of each measurement. Use the same frozen inputs for baseline comparisons. The README now supplies the exact LAN commands and output paths needed to collect these runs.
