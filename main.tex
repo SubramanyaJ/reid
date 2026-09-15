@@ -81,20 +81,32 @@ subramanyaj.cs23@bmsce.ac.in
 \maketitle
 
 \begin{abstract}
-Object re-identification on camera nodes benefits from an explicit connection between the observed foreground region and the evidence used to retrieve it. This paper presents a classical pipeline that forms coherent object observations, extracts a masked 602-dimensional appearance descriptor, and retrieves candidate exemplars using random-hyperplane locality-sensitive hashing (LSH) followed by exact cosine verification. Core support, normalized size constraints, and temporal confirmation suppress isolated fragments before feature extraction. The descriptor combines regional color, multiscale texture, gradient structure, and channel statistics, while mutable hash tables retain references to bounded identity exemplars. Evaluation on a real parking-lot recording covers 9,484 frames over 316.13 seconds at $960\times540$ resolution. The run completes without frame-processing errors and achieves 72.55 frames/s of wall-clock replay throughput; human review establishes 69.23\% precision among accepted match decisions. A separate synthetic-vector search benchmark measures a 4.77-fold query speedup over exhaustive cosine search at 10,000 vectors, retaining the exact nearest candidate for 98.33\% of queries. The results demonstrate a working, inspectable visual retrieval system with measured field behavior and a clear index-scaling advantage at larger tested galleries.
+  Object re-identification on camera nodes depends on an explicit connection between the observed foreground region and the evidence used to retrieve it.
+  This paper presents a classical pipeline that forms coherent object observations, extracts a masked 602-dimensional appearance descriptor, and retrieves candidate exemplars using random-hyperplane locality-sensitive hashing (LSH) followed by exact cosine verification.
+  Core support, normalized size constraints, and temporal confirmation suppress isolated fragments before feature extraction.
+  The descriptor combines regional color, multiscale texture, gradient structure, and channel statistics, while mutable hash tables retain references to bounded identity exemplars.
+  Evaluation on a real parking-lot recording covers 9,484 frames over 316.13 seconds at $960\times540$ resolution. The run completes without frame-processing errors and achieves 72.55 frames/s of wall-clock replay throughput; human review establishes 69.23\% precision among accepted match decisions.
+  A separate synthetic-vector search benchmark measures a 4.77-fold query speedup over exhaustive cosine search at 10,000 vectors, retaining the exact nearest candidate for 98.33\% of queries.
 
 \end{abstract}
 
 \begin{IEEEkeywords}
-object re-identification, foreground segmentation, handcrafted descriptor, locality-sensitive hashing, approximate nearest neighbors, reproducible evaluation
+Object Re-identification, Foreground Segmentation, Locality-Sensitive Hashing
 \end{IEEEkeywords}
 
 \section{Introduction}
-Re-identification associates observations of a physical object when continuous tracking is unavailable, for example after the object leaves one camera and appears in another. The difficulty begins before retrieval: a foreground fragment, an oversized bounding box, or background contamination can change the appearance vector substantially. An efficient index cannot recover identity information that was lost while forming the observation. A useful system must therefore explain both what it bounds and how that bounded evidence becomes a searchable representation.
+Re-identification associates observations of a physical object when continuous tracking is unavailable, for example after the object leaves one camera and appears in another.
+The difficulty begins before retrieval: a foreground fragment, an oversized bounding box, or background contamination can change the appearance vector substantially.
+An efficient index cannot recover identity information that was lost while forming the observation.
+A useful system must therefore explain both what it bounds and how that bounded evidence becomes a searchable representation.
 
-Recent object and vehicle Re-ID methods use transformer representations, self-supervised learning, and domain adaptation to improve discrimination under viewpoint and illumination changes~\cite{transreid2021,git2023,ssbver2023,daynight2024,vehiclemae2025}. These developments motivate complementary investigation of a transparent classical pipeline whose parameters, memory organization, and decisions can be inspected directly. Such a pipeline is useful for CPU-based prototypes and for studying the relationship between segmentation, representation, and candidate search without an additional training stage.
+Recent object and vehicle Re-ID methods use transformer representations, self-supervised learning, and domain adaptation to improve discrimination under viewpoint and illumination changes~\cite{transreid2021,git2023,ssbver2023,daynight2024,vehiclemae2025}.
+These developments motivate complementary investigation of a transparent classical pipeline whose parameters, memory organization, and decisions can be inspected directly.
+Such a pipeline is useful for CPU-based prototypes and for studying the relationship between segmentation, representation, and candidate search without an additional training stage.
 
-We present a stationary-camera pipeline that connects foreground support to temporal object formation, masked appearance embedding, binary signatures, and exact candidate verification. We use the term \emph{object} for a coherent foreground component satisfying geometric and temporal conditions. This operational definition supports the vehicle-oriented prototype and whole-object demonstrations; semantic classification is a separate task. Likewise, a hash collision supplies a retrieval candidate rather than a unique physical identity.
+We present a stationary-camera pipeline that connects foreground support to temporal object formation, masked appearance embedding, binary signatures, and exact candidate verification.
+We use the term \emph{object} for a coherent foreground component satisfying geometric and temporal conditions.
+This operational definition supports the vehicle-oriented prototype and whole-object demonstrations; semantic classification is a separate task. Likewise, a hash collision supplies a retrieval candidate rather than a unique physical identity.
 
 The main contributions are:
 \begin{enumerate}
@@ -102,19 +114,24 @@ The main contributions are:
 \item A 602-value masked descriptor, termed MVSV-G, with auditable dimensional accounting and block-normalized color, texture, structure, and statistical evidence.
 \item A random hyperplane index with radius-one probing, explicit exemplar references, and exact cosine verification, together with a derivation of its collision and candidate admission probabilities.
 \end{enumerate}
-The contribution is an integrated, reproducible system: established visual and indexing components are connected to persistent image evidence and human verification of the resulting associations.
 
 \section{Related Work}
 \subsection{Classical Segmentation and Object Formation}
-Adaptive Gaussian-mixture background subtraction estimates foreground in stationary-camera streams~\cite{zivkovic2004,opencvmog2}. Shadow separation and component geometry help turn this pixel support into useful observations. Our method adds an explicit thickness test, independent width and height bounds, and foreground occupancy constraints before admitting an object crop.
+Adaptive Gaussian-mixture background subtraction estimates foreground in stationary-camera streams~\cite{zivkovic2004,opencvmog2}.
+Shadow separation and component geometry help turn this pixel support into useful observations. Our method adds an explicit thickness test, independent width and height bounds, and foreground occupancy constraints before admitting an object crop.
 
 \subsection{Appearance Representations for Re-Identification}
-TransReID uses patch-based transformers and camera/view side information~\cite{transreid2021}; GiT combines local graph interactions with global transformer features~\cite{git2023}. SSBVER combines supervised and self-supervised learning to improve vehicle representations without extra deployment modules~\cite{ssbver2023}. CAViT adds contextual alignment for video objects~\cite{cavit2022}. Day--night adaptation~\cite{daynight2024}, VehicleMAE pre-training~\cite{vehiclemae2025}, and modality-aware meta-learning~\cite{kamenou2023} address appearance changes across acquisition conditions. Yi et al. survey the broader vehicle Re-ID landscape~\cite{yi2025survey}.
+TransReID uses patch-based transformers and camera/view side information~\cite{transreid2021}. It obtains a maximum mAP score of 86.0. GiT combines local graph interactions with global transformer features~\cite{git2023}.
+SSBVER combines supervised and self-supervised learning to improve vehicle representations without extra deployment modules~\cite{ssbver2023}.
+CAViT adds contextual alignment for video objects~\cite{cavit2022}.
+Day--night adaptation~\cite{daynight2024}, VehicleMAE pre-training~\cite{vehiclemae2025}, and modality-aware meta-learning~\cite{kamenou2023} address appearance changes across acquisition conditions.
 
-Our representation combines local binary patterns (LBP)~\cite{ojala2002}, gradient histograms~\cite{dalal2005}, and masked regional statistics. ORB supplies local correspondence evidence when enough keypoints are available~\cite{orb2011}. This offers a deterministic descriptor without representation training. Table~\ref{tab:baselines} compares its deployment requirements with three published Re-ID approaches; their recognition scores are not interchangeable with human review of accepted matches in a parking-lot video.
+Our representation combines local binary patterns (LBP)~\cite{ojala2002}, gradient histograms~\cite{dalal2005}, and masked regional statistics.
+ORB supplies local correspondence evidence when enough keypoints are available~\cite{orb2011}.
+This offers a deterministic descriptor without representation training.
 
 \subsection{Approximate Search and Tracking}
-SPANN studies large-scale vector indexing~\cite{spann2021}, while SPFresh addresses incremental index updates~\cite{spfresh2023}. Window-filtered ANN~\cite{windowann2024} and the NeurIPS ANN challenge~\cite{annchallenge2022} motivate evaluating eligibility, recall, and latency together. For temporal association, ByteTrack uses detection confidence~\cite{bytetrack2022}; our tracker instead assigns admissible foreground components using overlap, displacement, and scale change~\cite{scipylsa}. These roles separate within-view continuity from gallery retrieval.
+SPANN studies large-scale vector indexing~\cite{spann2021}, while SPFresh addresses incremental index updates~\cite{spfresh2023}. For temporal association, ByteTrack uses detection confidence~\cite{bytetrack2022}; our tracker instead assigns admissible foreground components using overlap, displacement, and scale change~\cite{scipylsa}. These roles separate within-view continuity from gallery retrieval.
 
 \subsection{Locality-Sensitive Hashing for Visual Retrieval}
 Random-hyperplane LSH maps angular similarity to a collision probability~\cite{charikar2002}. Multi-probe search visits neighboring buckets to increase candidate coverage without replicating the entire index~\cite{lv2007multiprobe}. More recent work revisits the bucket structure: DB-LSH constructs query-dependent buckets~\cite{dblsh2022}, and DET-LSH uses dynamic encoding trees to support efficient indexing and range queries~\cite{detlsh2024}. These methods highlight the importance of bucket boundaries and index maintenance. We use fixed binary signatures with exhaustive one-bit probing, an auditable choice for mutable exemplar galleries. Full-vector cosine scoring verifies retrieved candidates, and an exhaustive scan supplies the numerical reference for query speed and nearest-neighbor retention.
@@ -132,7 +149,7 @@ Object-specific mask and quality admission\\$\downarrow$\\
 Masked 602-value descriptor and normalization\\$\downarrow$\\
 Binary signatures and nearby hash buckets\\$\downarrow$\\
 Candidate union, exact cosine, object preview}}
-\caption{The visual path from observation formation to retrieval. Hash tables contain exemplar references; full descriptors remain available for verification.}
+\caption{Flowchart of the framework}
 \label{fig:pipeline}
 \end{figure}
 
