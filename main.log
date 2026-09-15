@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.3.11)  14 SEP 2026 23:48
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.3.11)  15 SEP 2026 05:49
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -591,40 +591,78 @@ File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 (E:\opt\MiKTex\tex/latex/microtype\mt-msb.cfg
 File: mt-msb.cfg 2005/06/01 v1.0 microtype config. file: AMS symbols (b) (RS)
 )
-Underfull \vbox (badness 10000) has occurred while \output is active []
+Underfull \vbox (badness 4543) has occurred while \output is active []
 
  [1{C:/Users/Subramanya J/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{E:/
 opt/MiKTex/fonts/enc/dvips/base/8r.enc}
 
 
-] [2] [3]
+]
+
+LaTeX Warning: Reference `tab:baselines' on page 2 undefined on input line 114.
+
+
+
+LaTeX Warning: Citation `detlsh2024' on page 2 undefined on input line 120.
+
+[2] [3]
+LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 2
+70.
+ (E:\opt\MiKTex\tex/latex/psnfss\ot1pcr.fd
+File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
+)
 Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on in
-put line 326.
+put line 273.
  [4]
-Underfull \hbox (badness 10000) in paragraph at lines 388--389
-[]\OT1/ptm/m/it/10 (+20) Clustered-vector di-ag-nos-tics: \OT1/ptm/m/n/10 (+20)
- nor-mal-ized 602-
+
+LaTeX Warning: Reference `tab:baselines' on page 5 undefined on input line 330.
+
+
+
+Underfull \hbox (badness 2512) in paragraph at lines 341--341
+[]\OT1/ptm/m/n/9 (+20) Supervised and self-supervised
  []
 
-LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 3
-90.
-(E:\opt\MiKTex\tex/latex/psnfss\ot1pcr.fd
-File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
-) [5]
-<paper_figures/qualitative.png, id=279, 801.2115pt x 174.105pt>
-File: paper_figures/qualitative.png Graphic file (type png)
-<use paper_figures/qualitative.png>
-Package pdftex.def Info: paper_figures/qualitative.png  used on input line 477.
 
-(pdftex.def)             Requested size: 516.0pt x 112.13081pt.
- [6]
-<paper_figures/search_latency.pdf, id=291, 252.945pt x 166.22101pt>
-File: paper_figures/search_latency.pdf Graphic file (type pdf)
-<use paper_figures/search_latency.pdf>
-Package pdftex.def Info: paper_figures/search_latency.pdf  used on input line 4
-91.
-(pdftex.def)             Requested size: 252.0pt x 165.60425pt.
- [7 <./paper_figures/qualitative.png> <./paper_figures/search_latency.pdf>]
+LaTeX Warning: Reference `tab:baselines' on page 5 undefined on input line 346.
+
+
+[5]
+
+LaTeX Warning: Reference `tab:parking' on page 6 undefined on input line 349.
+
+
+LaTeX Warning: Reference `fig:review' on page 6 undefined on input line 398.
+
+[6]
+<paper_figures/parking-approved-observation.jpg, id=268, 132.495pt x 56.21pt>
+File: paper_figures/parking-approved-observation.jpg Graphic file (type jpg)
+<use paper_figures/parking-approved-observation.jpg>
+Package pdftex.def Info: paper_figures/parking-approved-observation.jpg  used o
+n input line 404.
+(pdftex.def)             Requested size: 108.3595pt x 45.97069pt.
+<paper_figures/parking-approved-candidate.jpg, id=269, 124.465pt x 54.2025pt>
+File: paper_figures/parking-approved-candidate.jpg Graphic file (type jpg)
+<use paper_figures/parking-approved-candidate.jpg>
+Package pdftex.def Info: paper_figures/parking-approved-candidate.jpg  used on 
+input line 405.
+(pdftex.def)             Requested size: 108.35963pt x 47.18886pt.
+<paper_figures/parking-rejected-observation.jpg, id=270, 368.37625pt x 137.5137
+5pt>
+File: paper_figures/parking-rejected-observation.jpg Graphic file (type jpg)
+<use paper_figures/parking-rejected-observation.jpg>
+Package pdftex.def Info: paper_figures/parking-rejected-observation.jpg  used o
+n input line 407.
+(pdftex.def)             Requested size: 108.35527pt x 40.4487pt.
+<paper_figures/parking-rejected-candidate.jpg, id=271, 271.0125pt x 86.3225pt>
+File: paper_figures/parking-rejected-candidate.jpg Graphic file (type jpg)
+<use paper_figures/parking-rejected-candidate.jpg>
+Package pdftex.def Info: paper_figures/parking-rejected-candidate.jpg  used on 
+input line 408.
+(pdftex.def)             Requested size: 108.35757pt x 34.51389pt.
+ [7 <./paper_figures/parking-approved-observation.jpg> <./paper_figures/parking
+-approved-candidate.jpg> <./paper_figures/parking-rejected-observation.jpg> <./
+paper_figures/parking-rejected-candidate.jpg>]
 
 ** Conference Paper **
 Before submitting the final camera ready copy, remember to:
@@ -636,33 +674,44 @@ Before submitting the final camera ready copy, remember to:
  uses only Type 1 fonts and that every step in the generation
  process uses the appropriate paper size.
 
+[8
 
-Package balance Warning: You have called \balance in second column
-(balance)                Columns might not be balanced.
-
-[8] (main.aux)
+] (main.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2025-12-24>
  ***********
 
 
+LaTeX Warning: There were undefined references.
+
+
 LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
 
-Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: 7E7F5306E45E8CBDE06E931AA7F6D4AD;5753.
+
+Package rerunfilecheck Warning: File `main.out' has changed.
+(rerunfilecheck)                Rerun to get outlines right
+(rerunfilecheck)                or use package `bookmark'.
+
+Package rerunfilecheck Info: Checksums for `main.out':
+(rerunfilecheck)             Before: 7E7F5306E45E8CBDE06E931AA7F6D4AD;5753
+(rerunfilecheck)             After:  CC19BCFAE0487122FB458B47CAC343D1;6203.
  ) 
 Here is how much of TeX's memory you used:
- 15581 strings out of 467871
- 238451 string characters out of 5433264
- 714916 words of memory out of 5000000
- 43776 multiletter control sequences out of 15000+600000
- 693982 words of font info for 375 fonts, out of 8000000 for 9000
+ 15605 strings out of 467871
+ 239398 string characters out of 5433264
+ 709634 words of memory out of 5000000
+ 43791 multiletter control sequences out of 15000+600000
+ 694907 words of font info for 389 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 75i,15n,79p,1359b,582s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 75i,15n,79p,1439b,584s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
-pdfTeX warning (dest): name{table.6} has been referenced but does not exist, re
+pdfTeX warning (dest): name{table.4} has been referenced but does not exist, re
 placed by a fixed one
+
+
+pdfTeX warning (dest): name{equation.17} has been referenced but does not exist
+, replaced by a fixed one
 
 <E:/opt/MiKTex/fonts/type1/public/amsfonts/cm/cmbx10.pfb><E:/opt/MiKTex/fonts/t
 ype1/public/amsfonts/cm/cmex10.pfb><E:/opt/MiKTex/fonts/type1/public/amsfonts/c
@@ -671,17 +720,16 @@ pt/MiKTex/fonts/type1/public/amsfonts/cm/cmmi5.pfb><E:/opt/MiKTex/fonts/type1/p
 ublic/amsfonts/cm/cmmi7.pfb><E:/opt/MiKTex/fonts/type1/public/amsfonts/cm/cmmi9
 .pfb><E:/opt/MiKTex/fonts/type1/public/amsfonts/cm/cmmib10.pfb><E:/opt/MiKTex/f
 onts/type1/public/amsfonts/cm/cmr10.pfb><E:/opt/MiKTex/fonts/type1/public/amsfo
-nts/cm/cmr5.pfb><E:/opt/MiKTex/fonts/type1/public/amsfonts/cm/cmr7.pfb><E:/opt/
-MiKTex/fonts/type1/public/amsfonts/cm/cmr9.pfb><E:/opt/MiKTex/fonts/type1/publi
-c/amsfonts/cm/cmsy10.pfb><E:/opt/MiKTex/fonts/type1/public/amsfonts/cm/cmsy7.pf
-b><E:/opt/MiKTex/fonts/type1/public/amsfonts/cm/cmsy9.pfb><E:/opt/MiKTex/fonts/
-type1/public/amsfonts/symbols/msbm10.pfb><E:/opt/MiKTex/fonts/type1/urw/courier
-/ucrr8a.pfb><E:/opt/MiKTex/fonts/type1/urw/times/utmb8a.pfb><E:/opt/MiKTex/font
-s/type1/urw/times/utmbi8a.pfb><E:/opt/MiKTex/fonts/type1/urw/times/utmr8a.pfb><
-E:/opt/MiKTex/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (8 pages, 454136 bytes).
+nts/cm/cmr7.pfb><E:/opt/MiKTex/fonts/type1/public/amsfonts/cm/cmr9.pfb><E:/opt/
+MiKTex/fonts/type1/public/amsfonts/cm/cmsy10.pfb><E:/opt/MiKTex/fonts/type1/pub
+lic/amsfonts/cm/cmsy7.pfb><E:/opt/MiKTex/fonts/type1/public/amsfonts/cm/cmsy9.p
+fb><E:/opt/MiKTex/fonts/type1/public/amsfonts/symbols/msbm10.pfb><E:/opt/MiKTex
+/fonts/type1/urw/courier/ucrr8a.pfb><E:/opt/MiKTex/fonts/type1/urw/times/utmb8a
+.pfb><E:/opt/MiKTex/fonts/type1/urw/times/utmbi8a.pfb><E:/opt/MiKTex/fonts/type
+1/urw/times/utmr8a.pfb><E:/opt/MiKTex/fonts/type1/urw/times/utmri8a.pfb>
+Output written on main.pdf (8 pages, 347559 bytes).
 PDF statistics:
- 472 PDF objects out of 1000 (max. 8388607)
- 114 named destinations out of 1000 (max. 500000)
- 66803 words of extra memory for PDF output out of 74296 (max. 10000000)
+ 397 PDF objects out of 1000 (max. 8388607)
+ 101 named destinations out of 1000 (max. 500000)
+ 66813 words of extra memory for PDF output out of 74296 (max. 10000000)
 

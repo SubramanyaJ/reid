@@ -4,10 +4,7 @@
 \providecommand\HyField@AuxAddToCoFields[2]{}
 \citation{transreid2021,git2023,ssbver2023,daynight2024,vehiclemae2025}
 \citation{zivkovic2004,opencvmog2}
-\citation{grabcut2004}
 \@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
-\citation{bytetrack2022}
-\citation{scipylsa}
 \citation{transreid2021}
 \citation{git2023}
 \citation{ssbver2023}
@@ -19,83 +16,82 @@
 \citation{ojala2002}
 \citation{dalal2005}
 \citation{orb2011}
-\citation{charikar2002}
-\citation{lv2007multiprobe}
-\citation{dblsh2022}
 \citation{spann2021}
 \citation{spfresh2023}
 \citation{windowann2024}
 \citation{annchallenge2022}
-\citation{veri2016}
-\citation{synthehicle2023}
+\citation{bytetrack2022}
+\citation{scipylsa}
+\citation{charikar2002}
+\citation{lv2007multiprobe}
+\citation{dblsh2022}
+\citation{detlsh2024}
 \citation{zivkovic2004,opencvmog2}
 \@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{2}{section.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Classical Segmentation and Object Formation}{2}{subsection.2.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}Appearance Representations for Re-Identification}{2}{subsection.2.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Approximate Search and Dynamic Galleries}{2}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Approximate Search and Tracking}{2}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-D}}Locality-Sensitive Hashing for Visual Retrieval}{2}{subsection.2.4}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces The visual path from observation formation to retrieval. Hash tables contain exemplar references; full descriptors remain available for verification.}}{2}{figure.1}\protected@file@percent }
 \newlabel{fig:pipeline}{{1}{2}{The visual path from observation formation to retrieval. Hash tables contain exemplar references; full descriptors remain available for verification}{figure.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-D}}Evaluation Datasets and Remaining Design Questions}{2}{subsection.2.4}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {III}Proposed Methodology}{2}{section.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Foreground Support and Coherent Components}{2}{subsection.3.1}\protected@file@percent }
+\newlabel{eq:core}{{1}{2}{Foreground Support and Coherent Components}{equation.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Normalized Bounding-Box Admission}{2}{subsection.3.2}\protected@file@percent }
+\newlabel{eq:gates}{{2}{2}{Normalized Bounding-Box Admission}{equation.2}{}}
 \citation{scipylsa}
-\citation{grabcut2004}
-\newlabel{eq:core}{{2}{3}{Foreground Support and Coherent Components}{equation.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Normalized Bounding-Box Admission}{3}{subsection.3.2}\protected@file@percent }
-\newlabel{eq:gates}{{3}{3}{Normalized Bounding-Box Admission}{equation.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Temporal Association and Observation Quality}{3}{subsection.3.3}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces MVSV-G dimensional decomposition.}}{3}{table.1}\protected@file@percent }
-\newlabel{tab:descriptor}{{I}{3}{MVSV-G dimensional decomposition}{table.1}{}}
-\newlabel{eq:quality}{{6}{3}{Temporal Association and Observation Quality}{equation.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Masked Appearance Embedding}{3}{subsection.3.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-D}1}Color and joint statistics}{3}{subsubsection.3.4.1}\protected@file@percent }
 \citation{ojala2002}
 \citation{dalal2005}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Temporal Association and Observation Quality}{3}{subsection.3.3}\protected@file@percent }
+\newlabel{eq:quality}{{4}{3}{Temporal Association and Observation Quality}{equation.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Masked Appearance Embedding}{3}{subsection.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-D}1}Color and joint statistics}{3}{subsubsection.3.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-D}2}Texture and structure}{3}{subsubsection.3.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-D}3}Block normalization and cosine scoring}{3}{subsubsection.3.4.3}\protected@file@percent }
 \citation{charikar2002}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-D}2}Texture and structure}{4}{subsubsection.3.4.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-D}3}Block normalization and cosine scoring}{4}{subsubsection.3.4.3}\protected@file@percent }
-\newlabel{eq:embedding}{{11}{4}{Block normalization and cosine scoring}{equation.11}{}}
+\newlabel{eq:embedding}{{6}{4}{Block normalization and cosine scoring}{equation.6}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-E}}Hash Generation and Table Organization}{4}{subsection.3.5}\protected@file@percent }
-\newlabel{eq:probability}{{14}{4}{Hash Generation and Table Organization}{equation.14}{}}
+\newlabel{eq:probability}{{8}{4}{Hash Generation and Table Organization}{equation.8}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-F}}Multi-Probe Retrieval and Exact Verification}{4}{subsection.3.6}\protected@file@percent }
-\newlabel{eq:retrieve}{{17}{4}{Multi-Probe Retrieval and Exact Verification}{equation.17}{}}
+\newlabel{eq:retrieve}{{10}{4}{Multi-Probe Retrieval and Exact Verification}{equation.10}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-G}}Hyperparameter Selection}{4}{subsection.3.7}\protected@file@percent }
 \citation{numpyglobal}
+\citation{veri2016}
+\citation{transreid2021}
+\citation{git2023}
+\citation{ssbver2023}
 \@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Visual observation and indexed retrieval}}{5}{algorithm.1}\protected@file@percent }
 \newlabel{alg:pipeline}{{1}{5}{Multi-Probe Retrieval and Exact Verification}{algorithm.1}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Principal fixed settings in the visual evaluation.}}{5}{table.2}\protected@file@percent }
-\newlabel{tab:parameters}{{II}{5}{Principal fixed settings in the visual evaluation}{table.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-H}}Computational Complexity}{5}{subsection.3.8}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {IV}Experimental Results}{5}{section.4}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Experimental Setup}{5}{subsection.4.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-A}1}Datasets and protocol}{5}{subsubsection.4.1.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-A}2}Evaluation metrics}{5}{subsubsection.4.1.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-A}3}Baseline methods}{6}{subsubsection.4.1.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Quantitative Results}{6}{subsection.4.2}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Controlled synthetic motion replay: 100 evaluated frames, 200 target boxes.}}{6}{table.3}\protected@file@percent }
-\newlabel{tab:vision}{{III}{6}{Controlled synthetic motion replay: 100 evaluated frames, 200 target boxes}{table.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Qualitative Analysis}{6}{subsection.4.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Runtime Performance}{6}{subsection.4.4}\protected@file@percent }
-\citation{synthehicle2023}
-\citation{lv2007multiprobe,annchallenge2022}
-\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Default LSH versus exhaustive cosine search. Times are milliseconds; averages cover three index seeds. Generated-vector results measure index behavior, not field Re-ID accuracy.}}{7}{table.4}\protected@file@percent }
-\newlabel{tab:search}{{IV}{7}{Default LSH versus exhaustive cosine search. Times are milliseconds; averages cover three index seeds. Generated-vector results measure index behavior, not field Re-ID accuracy}{table.4}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Controlled synthetic replay example generated by the same fixture and processed by the implemented foreground/tracker code. Left: input with a thin negative distractor. Center: cleaned foreground. Right: current confirmed boxes (orange), compared with ground-truth boxes (green). This is a diagnostic illustration, not captured LAN footage.}}{7}{figure.2}\protected@file@percent }
-\newlabel{fig:qualitative}{{2}{7}{Controlled synthetic replay example generated by the same fixture and processed by the implemented foreground/tracker code. Left: input with a thin negative distractor. Center: cleaned foreground. Right: current confirmed boxes (orange), compared with ground-truth boxes (green). This is a diagnostic illustration, not captured LAN footage}{figure.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Descriptor ablation on 64 known rendered queries using exhaustive search. The 16 unknown queries are evaluated separately.}}{7}{table.5}\protected@file@percent }
-\newlabel{tab:ablation}{{V}{7}{Descriptor ablation on 64 known rendered queries using exhaustive search. The 16 unknown queries are evaluated separately}{table.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-E}}Discussion}{7}{subsection.4.5}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Measured query latency for generated clustered vectors. The default index amortizes its lookup overhead at the larger tested gallery sizes. Each point averages three seed-level query medians.}}{7}{figure.3}\protected@file@percent }
-\newlabel{fig:latency}{{3}{7}{Measured query latency for generated clustered vectors. The default index amortizes its lookup overhead at the larger tested gallery sizes. Each point averages three seed-level query medians}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-A}1}Parking-lot recording and deployment}{5}{subsubsection.4.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-A}2}Human review and metric scope}{5}{subsubsection.4.1.2}\protected@file@percent }
+\newlabel{eq:review}{{12}{5}{Human review and metric scope}{equation.12}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-A}3}Comparison with competing approaches}{5}{subsubsection.4.1.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Comparison with three published Re-ID approaches. Entries summarize the cited methods, not a shared-data accuracy or runtime experiment.}}{6}{table.1}\protected@file@percent }
+\newlabel{tab:baselines}{{I}{6}{Comparison with three published Re-ID approaches. Entries summarize the cited methods, not a shared-data accuracy or runtime experiment}{table.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Real parking-lot replay: 9,484 frames over 316.13 s. Precision uses human labels for accepted matches only.}}{6}{table.2}\protected@file@percent }
+\newlabel{tab:parking}{{II}{6}{Real parking-lot replay: 9,484 frames over 316.13 s. Precision uses human labels for accepted matches only}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Quantitative Parking-Lot Results}{6}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}LSH Query Speed and Scaling}{6}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Qualitative Analysis}{6}{subsection.4.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Synthetic-vector query-speed benchmark: default LSH versus exhaustive cosine, averaged across three index seeds. Exact-neighbor retention is an index fidelity check, not vehicle identity accuracy.}}{7}{table.3}\protected@file@percent }
+\newlabel{tab:search}{{III}{7}{Synthetic-vector query-speed benchmark: default LSH versus exhaustive cosine, averaged across three index seeds. Exact-neighbor retention is an index fidelity check, not vehicle identity accuracy}{table.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces First approved and first rejected pairs in review order, extracted unchanged from the stored parking-lot review images. Labels reflect the recorded reviewer judgments.}}{7}{figure.2}\protected@file@percent }
+\newlabel{fig:review}{{2}{7}{First approved and first rejected pairs in review order, extracted unchanged from the stored parking-lot review images. Labels reflect the recorded reviewer judgments}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-E}}Runtime Performance}{7}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-F}}Discussion}{7}{subsection.4.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {V}Conclusion and Future Work}{7}{section.5}\protected@file@percent }
 \bibcite{transreid2021}{1}
 \bibcite{git2023}{2}
 \bibcite{ssbver2023}{3}
 \bibcite{daynight2024}{4}
 \bibcite{vehiclemae2025}{5}
 \bibcite{cavit2022}{6}
-\bibcite{synthehicle2023}{7}
-\bibcite{kamenou2023}{8}
-\bibcite{yi2025survey}{9}
+\bibcite{kamenou2023}{7}
+\bibcite{yi2025survey}{8}
+\bibcite{detlsh2024}{9}
 \bibcite{dblsh2022}{10}
 \bibcite{spann2021}{11}
 \bibcite{annchallenge2022}{12}
@@ -107,12 +103,10 @@
 \bibcite{dalal2005}{18}
 \bibcite{charikar2002}{19}
 \bibcite{lv2007multiprobe}{20}
-\bibcite{grabcut2004}{21}
-\bibcite{orb2011}{22}
-\bibcite{veri2016}{23}
-\bibcite{opencvmog2}{24}
-\bibcite{scipylsa}{25}
-\bibcite{numpyglobal}{26}
-\@writefile{toc}{\contentsline {section}{\numberline {V}Conclusion and Future Work}{8}{section.5}\protected@file@percent }
+\bibcite{orb2011}{21}
+\bibcite{veri2016}{22}
+\bibcite{opencvmog2}{23}
+\bibcite{scipylsa}{24}
+\bibcite{numpyglobal}{25}
 \@writefile{toc}{\contentsline {section}{References}{8}{section*.1}\protected@file@percent }
 \gdef \@abspage@last{8}

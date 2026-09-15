@@ -81,7 +81,8 @@ subramanyaj.cs23@bmsce.ac.in
 \maketitle
 
 \begin{abstract}
-Object re-identification on modest camera nodes benefits from an explicit connection between the observed foreground region and the evidence used to retrieve it. This paper presents a classical pipeline that forms coherent object observations, extracts a masked 602-dimensional appearance descriptor, and retrieves candidate exemplars using random-hyperplane locality-sensitive hashing (LSH) followed by exact cosine scoring. A substantial core test, normalized size constraints, and temporal confirmation suppress isolated fragments before feature extraction. The descriptor combines regional color, multiscale texture, gradient structure, and channel statistics; mutable hash tables retain references to bounded identity exemplars. An evaluation separates controlled motion replay, held-out rendered crops, and clustered-vector search diagnostics. On a 10,000-vector diagnostic, eight 12-bit tables with radius-one probing reduce the candidate fraction to 2.63\% and achieve a 4.77-fold query speedup over exhaustive search. Controlled motion replay yields a confirmed-box F1 score of 0.9744 and mask intersection-over-union of 0.7405. The study establishes an inspectable implementation and a measurable efficiency envelope, while image-descriptor ablations identify the next improvements in illumination robustness and acceptance calibration.
+Object re-identification on camera nodes benefits from an explicit connection between the observed foreground region and the evidence used to retrieve it. This paper presents a classical pipeline that forms coherent object observations, extracts a masked 602-dimensional appearance descriptor, and retrieves candidate exemplars using random-hyperplane locality-sensitive hashing (LSH) followed by exact cosine verification. Core support, normalized size constraints, and temporal confirmation suppress isolated fragments before feature extraction. The descriptor combines regional color, multiscale texture, gradient structure, and channel statistics, while mutable hash tables retain references to bounded identity exemplars. Evaluation on a real parking-lot recording covers 9,484 frames over 316.13 seconds at $960\times540$ resolution. The run completes without frame-processing errors and achieves 72.55 frames/s of wall-clock replay throughput; human review establishes 69.23\% precision among accepted match decisions. A separate synthetic-vector search benchmark measures a 4.77-fold query speedup over exhaustive cosine search at 10,000 vectors, retaining the exact nearest candidate for 98.33\% of queries. The results demonstrate a working, inspectable visual retrieval system with measured field behavior and a clear index-scaling advantage at larger tested galleries.
+
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -91,7 +92,7 @@ object re-identification, foreground segmentation, handcrafted descriptor, local
 \section{Introduction}
 Re-identification associates observations of a physical object when continuous tracking is unavailable, for example after the object leaves one camera and appears in another. The difficulty begins before retrieval: a foreground fragment, an oversized bounding box, or background contamination can change the appearance vector substantially. An efficient index cannot recover identity information that was lost while forming the observation. A useful system must therefore explain both what it bounds and how that bounded evidence becomes a searchable representation.
 
-Recent object and vehicle Re-ID methods use transformer representations, self-supervised learning, and domain adaptation to improve discrimination under viewpoint and illumination changes~\cite{transreid2021,git2023,ssbver2023,daynight2024,vehiclemae2025}. These developments motivate complementary investigation of a transparent classical pipeline whose parameters, memory organization, and failure modes can be inspected directly. Such a pipeline is useful for CPU-based prototypes and for studying the relationship between segmentation, representation, and candidate search without an additional training stage.
+Recent object and vehicle Re-ID methods use transformer representations, self-supervised learning, and domain adaptation to improve discrimination under viewpoint and illumination changes~\cite{transreid2021,git2023,ssbver2023,daynight2024,vehiclemae2025}. These developments motivate complementary investigation of a transparent classical pipeline whose parameters, memory organization, and decisions can be inspected directly. Such a pipeline is useful for CPU-based prototypes and for studying the relationship between segmentation, representation, and candidate search without an additional training stage.
 
 We present a stationary-camera pipeline that connects foreground support to temporal object formation, masked appearance embedding, binary signatures, and exact candidate verification. We use the term \emph{object} for a coherent foreground component satisfying geometric and temporal conditions. This operational definition supports the vehicle-oriented prototype and whole-object demonstrations; semantic classification is a separate task. Likewise, a hash collision supplies a retrieval candidate rather than a unique physical identity.
 
@@ -101,28 +102,22 @@ The main contributions are:
 \item A 602-value masked descriptor, termed MVSV-G, with auditable dimensional accounting and block-normalized color, texture, structure, and statistical evidence.
 \item A random hyperplane index with radius-one probing, explicit exemplar references, and exact cosine verification, together with a derivation of its collision and candidate admission probabilities.
 \end{enumerate}
-These contributions concern system integration, implementation detail, and evaluation of established components, and they do not claim a new background model or a new LSH family.
+The contribution is an integrated, reproducible system: established visual and indexing components are connected to persistent image evidence and human verification of the resulting associations.
 
 \section{Related Work}
 \subsection{Classical Segmentation and Object Formation}
-Adaptive Gaussian-mixture background subtraction provides a practical foreground estimate for stationary cameras~\cite{zivkovic2004,opencvmog2}. Its output is sensitive to shadows, small motion regions, and model adaptation. GrabCut refines foreground through graph-cut optimization~\cite{grabcut2004}, but its usefulness depends on initialization. Our pipeline uses component support and geometry before optional refinement, making the validity of the observed region explicit.
-
-Temporal association adds evidence that a region persists as an object. ByteTrack demonstrates the importance of how detections are associated, including lower-confidence observations~\cite{bytetrack2022}. Our classical implementation instead gates foreground components and solves a one-to-one rectangular assignment~\cite{scipylsa}, using overlap, displacement, and size change. The distinction matters: our tracker consumes adaptive foreground regions rather than detections from a trained category model.
+Adaptive Gaussian-mixture background subtraction estimates foreground in stationary-camera streams~\cite{zivkovic2004,opencvmog2}. Shadow separation and component geometry help turn this pixel support into useful observations. Our method adds an explicit thickness test, independent width and height bounds, and foreground occupancy constraints before admitting an object crop.
 
 \subsection{Appearance Representations for Re-Identification}
-TransReID models object appearance with transformer features~\cite{transreid2021}; GiT introduces graph interaction for vehicle representations~\cite{git2023}. Self-supervised vehicle Re-ID explores scalable representation learning~\cite{ssbver2023}, while CAViT incorporates contextual alignment for video objects~\cite{cavit2022}. Day--night adaptation~\cite{daynight2024}, VehicleMAE pre-training~\cite{vehiclemae2025}, and meta-learning across visual modalities~\cite{kamenou2023} address variations that a fixed appearance descriptor must also confront. Yi et al. organize the broader vehicle Re-ID literature and its challenges~\cite{yi2025survey}.
+TransReID uses patch-based transformers and camera/view side information~\cite{transreid2021}; GiT combines local graph interactions with global transformer features~\cite{git2023}. SSBVER combines supervised and self-supervised learning to improve vehicle representations without extra deployment modules~\cite{ssbver2023}. CAViT adds contextual alignment for video objects~\cite{cavit2022}. Day--night adaptation~\cite{daynight2024}, VehicleMAE pre-training~\cite{vehiclemae2025}, and modality-aware meta-learning~\cite{kamenou2023} address appearance changes across acquisition conditions. Yi et al. survey the broader vehicle Re-ID landscape~\cite{yi2025survey}.
 
-Our descriptor draws on established local binary patterns (LBP)~\cite{ojala2002} and gradient histograms~\cite{dalal2005}, combining them with masked regional statistics. ORB provides an optional local-verification channel in the application~\cite{orb2011}; the experiments here isolate the global visual descriptor and its index. The comparison with learned Re-ID is architectural: published recognition scores from different datasets are not used as numerical baselines for our generated inputs.
+Our representation combines local binary patterns (LBP)~\cite{ojala2002}, gradient histograms~\cite{dalal2005}, and masked regional statistics. ORB supplies local correspondence evidence when enough keypoints are available~\cite{orb2011}. This offers a deterministic descriptor without representation training. Table~\ref{tab:baselines} compares its deployment requirements with three published Re-ID approaches; their recognition scores are not interchangeable with human review of accepted matches in a parking-lot video.
 
-\subsection{Approximate Search and Dynamic Galleries}
-Random-hyperplane hashing relates cosine similarity to binary collisions~\cite{charikar2002}. Multi-probe LSH expands the buckets visited per table to improve the space--recall tradeoff~\cite{lv2007multiprobe}. Our implementation uses a simple, reproducible ordering: the exact signature followed by every one-bit flip. It differs from the probability-ranked probing and distance family in the original multi-probe work.
+\subsection{Approximate Search and Tracking}
+SPANN studies large-scale vector indexing~\cite{spann2021}, while SPFresh addresses incremental index updates~\cite{spfresh2023}. Window-filtered ANN~\cite{windowann2024} and the NeurIPS ANN challenge~\cite{annchallenge2022} motivate evaluating eligibility, recall, and latency together. For temporal association, ByteTrack uses detection confidence~\cite{bytetrack2022}; our tracker instead assigns admissible foreground components using overlap, displacement, and scale change~\cite{scipylsa}. These roles separate within-view continuity from gallery retrieval.
 
-Recent search research includes query-dependent bucketing in DB-LSH~\cite{dblsh2022}, billion-scale indexing in SPANN~\cite{spann2021}, and incremental updates in SPFresh~\cite{spfresh2023}. Window-filtered ANN emphasizes that eligibility restrictions change the search problem~\cite{windowann2024}. The NeurIPS ANN challenge assesses accuracy, performance, and hardware cost at much larger scales~\cite{annchallenge2022}. Together, these studies motivate reporting quality, time, and storage jointly rather than using candidate reduction alone as a speed claim.
-
-\subsection{Evaluation Datasets and Remaining Design Questions}
-VeRi provides a real surveillance benchmark for vehicle identities~\cite{veri2016}. Synthehicle supplies synthetic multi-camera vehicle tracking and segmentation data, including Re-ID baselines~\cite{synthehicle2023}. Synthetic data permits known labels and controlled variation; its relevance depends on the diversity and realism of the generator. Our small deterministic fixtures serve a narrower purpose: they isolate implementation behavior and index scaling. Neither VeRi nor Synthehicle is used as experimental data in this study.
-
-Table~\ref{tab:literature} summarizes fifteen papers from 2021--2025. The resulting design questions are concrete: how should a coherent foreground region be admitted, which appearance blocks help under a specified perturbation, and when does a hash index outperform an optimized scan? The proposed methodology addresses these questions in a single inspectable implementation.
+\subsection{Locality-Sensitive Hashing for Visual Retrieval}
+Random-hyperplane LSH maps angular similarity to a collision probability~\cite{charikar2002}. Multi-probe search visits neighboring buckets to increase candidate coverage without replicating the entire index~\cite{lv2007multiprobe}. More recent work revisits the bucket structure: DB-LSH constructs query-dependent buckets~\cite{dblsh2022}, and DET-LSH uses dynamic encoding trees to support efficient indexing and range queries~\cite{detlsh2024}. These methods highlight the importance of bucket boundaries and index maintenance. We use fixed binary signatures with exhaustive one-bit probing, an auditable choice for mutable exemplar galleries. Full-vector cosine scoring verifies retrieved candidates, and an exhaustive scan supplies the numerical reference for query speed and nearest-neighbor retention.
 
 \section{Proposed Methodology}
 \noindent\textit{Overview of the Proposed Framework:}
@@ -142,15 +137,7 @@ Candidate union, exact cosine, object preview}}
 \end{figure}
 
 \subsection{Foreground Support and Coherent Components}
-The default estimator is OpenCV MOG2~\cite{zivkovic2004,opencvmog2}. Its statistical interpretation at pixel $u$ is
-\begin{equation}
-\begin{aligned}
-p(I_t(u)) &= \sum_{k=1}^{K_u}\pi_{k,t}(u)\,\mathcal{N}_{k,t}(I_t(u)),\\
-\mathcal{N}_{k,t}(v) &= \mathcal{N}(v;\boldsymbol\mu_{k,t}(u),\Sigma_{k,t}(u)),\\
-\sum_k\pi_{k,t}(u)&=1.
-\end{aligned}
-\end{equation}
-OpenCV performs the mixture updates. Only mask value 255 is accepted as foreground; the shadow value 127 is kept separate. A four-second warmup initializes the background. A $3\times3$ elliptical opening and closing suppress small isolated noise, followed by filling enclosed holes of at most $0.001HW$ pixels.
+The default estimator is OpenCV MOG2~\cite{zivkovic2004,opencvmog2}, which updates a Gaussian mixture at each pixel to distinguish persistent background from foreground. Only mask value 255 is accepted as foreground; the shadow value 127 is kept separate. A four-second warmup initializes the background. A $3\times3$ elliptical opening and closing suppress small isolated noise, followed by filling enclosed holes of at most $0.001HW$ pixels.
 
 For a connected component $C$, let $a_C=|C|$ and let $d(u,F^c)$ be the distance from pixel $u$ to the cleaned foreground complement. A substantial component satisfies
 \begin{equation}
@@ -160,7 +147,7 @@ a_C &\ge \max(9,\operatorname{round}(0.0008HW)),\\
 \end{aligned}
 \label{eq:core}
 \end{equation}
-The distance transform uses a zero border and OpenCV's five-mask approximation. Crucially, Eq.~\eqref{eq:core} tests the presence of a core and then retains its entire connected component. Thus, attached fingers can remain part of a palm-supported region while an isolated thin fragment fails admission. It does not broadly merge neighboring components or infer missing object parts.
+Here $F$ is the cleaned foreground set, $F^c$ its complement, $u$ a pixel coordinate, and $|C|$ the number of pixels in component $C$; $H$ and $W$ are frame height and width. The distance transform uses a zero border and OpenCV's five-mask approximation. Crucially, Eq.~\eqref{eq:core} tests the presence of a core and then retains its entire connected component. Thin detail attached to a substantial foreground region is retained, while an isolated thin fragment fails admission. This preserves connected appearance evidence without broadly merging neighboring components.
 
 \subsection{Normalized Bounding-Box Admission}
 We define $r_y=\operatorname{clip}((y+h)/H,0,1)$. All of the following inequalities must hold:
@@ -174,7 +161,7 @@ a_C/(wh)&\ge0.30,\qquad 0.4\le w/h\le3.5.
 \end{aligned}
 \label{eq:gates}
 \end{equation}
-The width, height, and upper-area bounds act independently. The minimum area increases slightly toward the image bottom, while foreground occupancy rejects mostly empty rectangles. At $960\times540$, the minimum integer width and height are 63 and 54 pixels, respectively, and the support floor is 2,074 pixels. These normalized restrictions encode a target-size envelope that can be calibrated for the camera placement.
+In Eq.~\eqref{eq:gates}, $(x,y)$ is the box's upper-left corner, $w,h$ are its width and height, $r_y$ is its normalized bottom position, and $a_C$ is component area. The width, height, and upper-area bounds act independently. The minimum area increases slightly toward the image bottom, while foreground occupancy rejects mostly empty rectangles. At $960\times540$, the minimum integer width and height are 63 and 54 pixels, respectively, and the support floor is 2,074 pixels. These normalized restrictions encode a target-size envelope that can be calibrated for the camera placement.
 
 \subsection{Temporal Association and Observation Quality}
 A track predicts its center using smoothed velocity. For track $i$ and component $j$, define center displacement $\delta_{ij}$ and scale change $\eta_{ij}$ as
@@ -188,19 +175,12 @@ c_{ij}&=0.45(1-\operatorname{IoU}(\widehat B_i,B_j))\\
 &\quad+0.40\delta_{ij}+0.15\eta_{ij}.
 \end{aligned}
 \end{equation}
-Size ratios outside $[0.45,2.2]$ are rejected, as are pairs with IoU below 0.01 and $\delta_{ij}>0.85$. A rectangular linear assignment produces one-to-one associations~\cite{scipylsa}. Invalid fragments are removed before assignment so they cannot shrink an established track.
+Here $\widehat B_i$ is track $i$'s predicted box with dimensions $\widehat w_i,\widehat h_i$, $B_j$ is candidate $j$'s box with dimensions $w_j,h_j$, and $\operatorname{ctr}$ returns a box center. The scale $d_i$ normalizes displacement; $\eta_{ij}$ penalizes logarithmic size change and $c_{ij}$ is the assignment cost. IoU is intersection area divided by union area. Size ratios outside $[0.45,2.2]$ are rejected, as are pairs with IoU below 0.01 and $\delta_{ij}>0.85$. A rectangular linear assignment produces one-to-one associations~\cite{scipylsa}. Invalid fragments are removed before assignment so they cannot shrink an established track.
 
-Measured velocity $\mathbf u_t$ updates the estimate and consistency:
-\begin{equation}
-\begin{aligned}
-\mathbf v_t&=0.65\mathbf v_{t-1}+0.35\mathbf u_t,\\
-e_t&=\|\mathbf u_t-\mathbf v_{t-1}\|_2\Delta t_m/d_i,\\
-s_t&=0.7s_{t-1}+0.3\exp(-e_t).
-\end{aligned}
-\end{equation}
-Here $\Delta t_m$ is time since the previous measured center. Confirmation requires six cumulative associated hits, $s_t\ge0.4$, and valid geometry. Tracks expire after more than 14 missed updates. A merged component containing two established track centers is withheld so the tracks can coast separately.
+Velocity is updated with weights 0.65 on the previous estimate and 0.35 on the newly measured velocity. Motion consistency $s_t$ is an exponential moving average of normalized prediction agreement, with weight 0.3 on each new measurement. Confirmation requires six cumulative associated hits, $s_t\ge0.4$, and valid geometry. Tracks expire after more than 14 missed updates. A merged component containing two established track centers is withheld so the tracks can coast separately.
 
-The crop is masked by its own component. Optional GrabCut~\cite{grabcut2004} uses a foreground core and background border, accepting refinement only when it retains at least 60\% of original foreground and its area is 0.55--1.6 times the original. Quality admission uses
+The crop is masked by its own connected component. Quality admission uses
+
 \begin{equation}
 \begin{aligned}
 q_0&=0.20q_s+0.25q_l+0.20q_f+0.15q_v+0.20s_t,\\
@@ -210,36 +190,13 @@ q_f&=\operatorname{clip}(1-|\phi-0.7|/0.7,0,1).
 \end{aligned}
 \label{eq:quality}
 \end{equation}
-Here $\phi=|M|/(h_cw_c)$ and $q_v$ is visible-box fraction. Severe clipping, low support, or insufficient size multiplies quality by 0.3; flagged occlusion multiplies it by 0.45. An observation is admitted at $q\ge0.42$. These terms are engineering scores, not probabilities of a correct identity.
+In Eq.~\eqref{eq:quality}, $q_0$ is the initial quality score, $h_c,w_c$ are crop dimensions, $q_s$ scores size, and $q_l$ scores sharpness using the masked variance of the image Laplacian $\nabla^2 I$. The fill score $q_f$ uses foreground occupancy $\phi=|M|/(h_cw_c)$; $q_v$ is the visible-box fraction and $s_t$ is motion consistency. The constants 90 and 180 set size and sharpness saturation scales. Severe clipping, low support, or insufficient size multiplies quality by 0.3; flagged occlusion multiplies it by 0.45. The resulting penalized score is $q$; an observation is admitted at $q\ge0.42$. These terms are engineering scores, not probabilities of a correct identity.
 
 \subsection{Masked Appearance Embedding}
-The crop is aspect-preserving letterboxed to $128\times80$ pixels. Image and mask resizing use area and nearest-neighbor interpolation, respectively. Masked statistics exclude padding; texture and gradients use a $7\times7$ eroded interior, reverting to the original support if fewer than ten pixels remain. Table~\ref{tab:descriptor} accounts for every descriptor value.
-
-\begin{table}[t]
-\centering\small
-\caption{MVSV-G dimensional decomposition.}
-\label{tab:descriptor}
-\begin{tabular}{lrp{0.55\columnwidth}}
-\toprule Block & Values & Construction\\\midrule
-Color & 180 & Regional histograms 156; Lab cell moments 24.\\
-Texture & 54 & Three radii, each with 10 LBP and 8 variance bins.\\
-Structure & 332 & Gradients 288; edges 10; silhouette and projections 34.\\
-Statistics & 36 & Channel moments 18; covariances 15; global measures 3.\\\midrule
-Total & 602 & Weighted, normalized concatenation.\\\bottomrule
-\end{tabular}
-\end{table}
+The crop is aspect-preserving letterboxed to $128\times80$ pixels. Image and mask resizing use area and nearest-neighbor interpolation, respectively. Masked statistics exclude padding; texture and gradients use a $7\times7$ eroded interior, reverting to the original support if fewer than ten pixels remain. The 602 descriptor values comprise 180 color values (156 regional histogram bins and 24 Lab cell moments), 54 texture values, 332 structure values, and 36 statistical values. This fixed decomposition makes the representation compact and reproducible.
 
 \subsubsection{Color and joint statistics}
-The whole crop and its upper and lower halves each contribute HSV histograms with 12/8/8 bins and Lab histograms with 8/8/8 bins. A $2\times2$ Lab partition contributes means and standard deviations. Histogram counts $n_b$ are transformed as
-\begin{equation}
-H_b=\sqrt{n_b/\max(1,\textstyle\sum_jn_j)}.
-\end{equation}
-This square-root frequency representation reduces domination by highly populated bins. For normalized HSV/Lab channel vector $\mathbf x_u\in\mathbb R^6$, covariance is
-\begin{equation}
-\widehat\Sigma=\frac{1}{n-1}\sum_{u\in M}
-(\mathbf x_u-\overline{\mathbf x})(\mathbf x_u-\overline{\mathbf x})^\top.
-\end{equation}
-The 15 off-diagonal terms complement six channel means, standard deviations, and interquartile ranges. Mask occupancy, normalized aspect ratio, and mean gradient magnitude complete the statistics block.
+The whole crop and its upper and lower halves each contribute HSV histograms with 12/8/8 bins and Lab histograms with 8/8/8 bins. A $2\times2$ Lab partition contributes means and standard deviations. Each histogram count is divided by the total masked count and square-rooted, reducing domination by highly populated bins. The statistical block uses normalized HSV/Lab values: six channel means, standard deviations, and interquartile ranges contribute 18 values, and the 15 off-diagonal sample covariances describe inter-channel dependence. Mask occupancy, normalized aspect ratio, and mean gradient magnitude supply the final three values.
 
 \subsubsection{Texture and structure}
 Eight circular neighbors at radius $R\in\{1,2,3\}$ define bits $b_p=\mathbf1[g_p\ge g_c]$. With circular transition count $U=\sum_{p=0}^{7}|b_p-b_{(p+1)\bmod8}|$, uniform rotation-invariant LBP~\cite{ojala2002} is
@@ -247,12 +204,9 @@ Eight circular neighbors at radius $R\in\{1,2,3\}$ define bits $b_p=\mathbf1[g_p
 \operatorname{LBP}_{8,R}^{\mathrm{riu2}}=
 \begin{cases}\sum_{p=0}^7b_p,&U\le2,\\9,&U>2.\end{cases}
 \end{equation}
-Each radius supplies ten LBP bins and eight log-variance bins. Sobel gradients form nine unsigned-orientation bins in each of $4\times8$ cells, inspired by HOG~\cite{dalal2005}. For cell $P$ and orientation bin $b$,
-\begin{equation}
-g_{P,b}=\sum_{u\in P\cap M_{\mathrm{int}}}
-\|\nabla I(u)\|_2\,\mathbf1[\operatorname{bin}(\nabla I(u))=b].
-\end{equation}
-Each cell histogram is normalized. Nine Canny edge-orientation bins and edge density add ten values. A $6\times4$ silhouette and its four row and six column means add coarse occupancy structure. The local LBP rotation property does not imply full viewpoint invariance of the combined descriptor.
+Here $g_c$ is center-pixel grayscale intensity, $g_p$ is neighbor $p$'s interpolated intensity, $\mathbf1[\cdot]$ is one when its condition holds and zero otherwise, and $U$ counts circular bit transitions. The radius $R$ is measured in canonical-crop pixels; codes 0--8 count set bits in uniform patterns, while code 9 collects the remaining patterns. Each radius supplies ten LBP bins and eight log-variance bins. Sobel gradients form nine unsigned-orientation bins in each of $4\times8$ cells, inspired by HOG~\cite{dalal2005}. Each cell accumulates gradient magnitudes by unsigned orientation over the masked interior, then normalizes its nine-bin histogram, contributing 288 values.
+
+Nine Canny edge-orientation bins and edge density add ten values. A $6\times4$ silhouette and its four row and six column means add coarse occupancy structure. The local LBP rotation property does not imply full viewpoint invariance of the combined descriptor.
 
 \subsubsection{Block normalization and cosine scoring}
 Let $\mathcal U(\mathbf f)=\mathbf f/\max(\|\mathbf f\|_2,10^{-12})$. For blocks $C,T,G,S$ and weights $\boldsymbol\alpha=(1,0.65,0.70,0.40)$,
@@ -264,13 +218,7 @@ Let $\mathcal U(\mathbf f)=\mathbf f/\max(\|\mathbf f\|_2,10^{-12})$. For blocks
 \end{aligned}
 \label{eq:embedding}
 \end{equation}
-The symbol $\Vert$ denotes concatenation. When all blocks are nonzero,
-\begin{equation}
-s(\mathbf z,\mathbf z')=
-\frac{\sum_b\alpha_b^2\mathcal U(\mathbf f_b)^\top\mathcal U(\mathbf f'_b)}
-{\sum_b\alpha_b^2}.
-\end{equation}
-Thus weights influence cosine through their squares, while independent normalization prevents block length alone from determining influence. A descriptor-profile checksum records the feature version and weights for compatibility.
+Here $\mathbf f_b$ is feature block $b$: $C,T,G,S$ denote color, texture, structure, and statistics. The operator $\mathcal U$ performs L2 normalization with a small numerical floor, $\alpha_b$ is its block weight, and $\Vert$ denotes concatenation. The final unit vector $\mathbf z$ is compared with another observation $\mathbf z'$ by dot-product cosine $s$. Independent normalization prevents block length alone from determining influence; the chosen weights contribute quadratically to cosine when every block is nonzero. A descriptor-profile checksum records the feature version and weights for compatibility.
 
 \subsection{Hash Generation and Table Organization}
 For table $l$ and bit $j$, draw independent $\mathbf r_{lj}\sim\mathcal N(\mathbf0,I_{602})$ with a recorded random seed. The signature is
@@ -280,7 +228,7 @@ h_{lj}(\mathbf z)&=\mathbf1[\mathbf r_{lj}^\top\mathbf z\ge0],\\
 H_l(\mathbf z)&=\sum_{j=0}^{b-1}2^jh_{lj}(\mathbf z).
 \end{aligned}
 \end{equation}
-The default $L=8$ tables and $b=12$ bits produce eight integers in $[0,4095]$. Planes and descriptors use float32, and bit zero is least significant. Similar vectors tend to share signatures, but many distinct objects can collide.
+Here $l$ indexes a table, $j$ a bit, $\mathbf r_{lj}$ is a Gaussian projection-plane normal, and $I_{602}$ is the identity covariance matrix. The binary output $h_{lj}$ records the side of the plane; $H_l$ packs $b$ such bits into an integer. The default $L=8$ tables and $b=12$ bits produce eight integers in $[0,4095]$. Planes and descriptors use float32, and bit zero is least significant. Similar vectors tend to share signatures, but many distinct objects can collide.
 
 For a fixed unit-vector pair with angle $\theta$, a single random-hyperplane bit agrees with probability $p=1-\theta/\pi$~\cite{charikar2002}. Independence gives
 \begin{equation}
@@ -291,7 +239,7 @@ P_r&=1-(1-q_r)^L,\qquad r\in\{0,1\}.
 \end{aligned}
 \label{eq:probability}
 \end{equation}
-Here $q_1$ allows zero or one differing bit within a table, and $P_r$ is admission by at least one table. These probabilities describe random index construction for a fixed pair, not the probability that two observations show the same physical object.
+Here $\theta$ is the pair's angle, $p$ is one-bit agreement probability, $q_0$ is exact-signature agreement, and $q_1$ allows zero or one differing bit in a table. The radius $r$ selects exact-only or one-bit probing, and $P_r$ is admission by at least one of $L$ independent tables. Clipping keeps the inverse cosine within its numerical domain. These probabilities describe random index construction for a fixed pair, not the probability that two observations show the same physical object.
 
 Each dictionary maps an integer signature to a set of exemplar keys:
 \begin{equation}
@@ -300,14 +248,9 @@ T_l[a]&=\{k:H_l(\mathbf z_k)=a\},\\
 R[k]&=(H_1(\mathbf z_k),\ldots,H_L(\mathbf z_k)).
 \end{aligned}
 \end{equation}
-The reverse map $R$ supports removal without scanning all buckets. Updating a key first removes its old references, then inserts its new signature into each table. Empty buckets are deleted. Full descriptors remain in the gallery for exact scoring; hash tables store references to them.
+Here $k$ identifies an exemplar, $a$ is an integer bucket signature, and $T_l[a]$ is the set of exemplar keys stored in that bucket of table $l$. The reverse map $R$ records each key's signatures and supports removal without scanning all buckets. Updating a key first removes its old references, then inserts its new signature into each table. Empty buckets are deleted. Full descriptors remain in the gallery for exact scoring; hash tables store references to them.
 
-The live gallery retains up to eight exemplars per identity. A near duplicate with cosine at least 0.985 replaces an older exemplar when quality improves. When retention is required, selection starts with the highest-quality item and then favors quality and diversity:
-\begin{equation}
-e^*=\arg\max_{e\in\mathcal P}
-\left[0.55q_e+0.45\left(1-\max_{a\in\mathcal S}\mathbf z_e^\top\mathbf z_a\right)\right].
-\end{equation}
-Here $\mathcal S$ is the selected set and $\mathcal P$ the remaining pool. This bounds exemplars per identity; the fixed-gallery benchmark evaluates the retrieval primitive separately from online retention.
+The live gallery retains up to eight exemplars per identity. A near duplicate with cosine at least 0.985 replaces an older exemplar when quality improves. Retention starts with the highest-quality item, then balances quality (weight 0.55) against cosine diversity from already selected exemplars (weight 0.45). Removing an exemplar also removes its bucket references, keeping the descriptor store and hash tables consistent.
 
 \subsection{Multi-Probe Retrieval and Exact Verification}
 For an eligible-gallery set $E_q$, define the per-table probe signatures
@@ -320,7 +263,11 @@ For an eligible-gallery set $E_q$, define the per-table probe signatures
 \end{aligned}
 \label{eq:retrieve}
 \end{equation}
-The XOR operation flips one bit. Candidate keys are deduplicated, then compared using the original normalized vectors. Empty candidate sets produce an abstention without an exhaustive fallback. The benchmark excludes self-samples and can exclude every same-camera gallery observation for cross-camera evaluation. The monitor pairs observed and reference crops with retrieval evidence so a user can inspect what a returned identifier represents.
+In Eq.~\eqref{eq:retrieve}, $q$ identifies the query, $E_q$ is the set of eligible gallery keys, $\mathcal A_l(q)$ lists the signatures probed in table $l$, and $\mathcal K_q$ is their deduplicated candidate union. XOR ($\oplus$) flips bit $j$; $\widehat k$ denotes the highest-cosine retained exemplar. Empty candidate sets provide no indexed match.
+
+Equation~\eqref{eq:retrieve} describes the search primitive. In the application, retrieved keys nominate identities, and exact scoring selects the strongest retained exemplar of each nominated identity. An already bound local track checks its existing identity, while identities occupied by other active tracks are excluded from a new assignment. Thus repeated confirmations and new associations can both generate a match decision.
+
+For the recorded run, available ORB evidence refines global visual cosine with weights 0.1 and 0.9, respectively. The application combines visual, temporal, and spatial scores with relative weights 0.78, 0.07, and 0.05, normalized over available channels. Context scores use elapsed time, position, and scale outside the appearance vector. No supported plate reading occurs in the archived observations. A visual floor of 0.60 and fused threshold of 0.82 admit \texttt{MATCH}; scores from 0.68 below 0.82 are \texttt{UNCERTAIN}. A gap below 0.035 between the two best viable identities also causes uncertainty. Human review evaluates these complete application decisions, rather than treating every hash collision as a successful Re-ID.
 
 \begin{algorithm}[t]
 \caption{Visual observation and indexed retrieval}
@@ -345,27 +292,7 @@ The XOR operation flips one bit. Candidate keys are deduplicated, then compared 
 \end{algorithm}
 
 \subsection{Hyperparameter Selection}
-Table~\ref{tab:parameters} records the principal settings. They were held fixed during each evaluation rather than optimized on its test queries. The tightened box envelope is an engineering revision; comparison with the earlier envelope checks its effect on the same motion sequence. The main retrieval configuration uses seed 17 operationally, while experiments repeat plane construction with seeds 17, 29, and 43. Index sensitivity also covers longer signatures, additional tables, and exact-bucket-only probing.
-
-\begin{table}[t]
-\centering\small
-\caption{Principal fixed settings in the visual evaluation.}
-\label{tab:parameters}
-\begin{tabular}{p{0.57\columnwidth}p{0.32\columnwidth}}
-\toprule Setting & Value\\\midrule
-MOG2 history / variance threshold & 500 / 24\\
-Background warmup & 4 s\\
-Opening and closing kernel & $3\times3$ ellipse\\
-Minimum core radius & $0.015\min(H,W)$\\
-Track confirmation / expiry & 6 hits / $>14$ misses\\
-Consistency / quality floor & 0.40 / 0.42\\
-Canonical crop / descriptor & $128\times80$ / 602\\
-Default tables / bits / probe radius & 8 / 12 / 1\\
-Maximum live exemplars per identity & 8\\
-Optional GrabCut in replay & Disabled\\
-Diagnostic acceptance threshold & Cosine $\ge0.82$\\\bottomrule
-\end{tabular}
-\end{table}
+The parking-lot replay uses the recorded operational configuration: MOG2 history 500 and variance threshold 24; a four-second warmup; the geometric constraints in Eq.~\eqref{eq:gates}; six-hit confirmation; quality floor 0.42; and observations spaced by at least 1.5 seconds of video time per confirmed track. The index uses eight 12-bit tables, radius-one probing, and seed 17, with at most eight exemplars per identity. These settings remain fixed throughout the recording, and reviewer labels do not update descriptors, thresholds, or subsequent predictions.
 
 \subsection{Computational Complexity}
 With fixed background-model and morphology settings, foreground processing scales with the $HW$ image pixels. For $n$ tracks and $m$ components, forming association costs takes $O(nm)$; dense assignment has a cubic worst-case bound in the larger dimension. Canonical feature extraction has fixed image support and descriptor dimension $D=602$.
@@ -374,141 +301,137 @@ Hash projection costs $O(LbD)$ per observation. Radius-one probing visits $L(b+1
 \begin{equation}
 T_q=O\bigl(LbD+V_q+|\mathcal K_q|D\bigr).
 \end{equation}
-Bounded top-$k$ selection adds candidate-dependent selection work. Dense buckets can make $V_q$ large; no unconditional sublinear query bound follows. Exhaustive scoring costs $O(ND)$ but benefits from contiguous matrix operations. Storage consists of $ND$ vector values, $LbD$ plane values, and $LN$ key memberships, with Python dictionary/set overhead measured separately. This analysis predicts an empirical break-even region rather than universal LSH superiority.
+Here $T_q$ is query work, $D$ is descriptor dimension, $V_q$ counts bucket references visited (including repeated keys), and $|\mathcal K_q|$ is the number of unique eligible candidates. Bounded top-$k$ selection, where $k$ is the number of requested neighbors, adds candidate-dependent selection work. Dense buckets can make $V_q$ large; no unconditional sublinear query bound follows. Exhaustive scoring costs $O(ND)$ but benefits from contiguous matrix operations. For a gallery of $N$ exemplars, storage consists of $ND$ vector values, $LbD$ plane values, and $LN$ key memberships, with Python dictionary/set overhead measured separately. This analysis predicts an empirical break-even region rather than universal LSH superiority.
 
 \section{Experimental Results}
 \subsection{Experimental Setup}
-\subsubsection{Datasets and protocol}
-All reported measurements were produced locally on an AMD Ryzen 9 7940HS processor with eight cores and sixteen logical processors, Windows 11, Python 3.14.3, NumPy 2.5.3, SciPy 1.18.1, and OpenCV 4.14.0.94. OpenCV and BLAS thread counts were pinned to one for the research suite~\cite{numpyglobal}. Cameras and remote nodes were not started for these measurements.
+\subsubsection{Parking-lot recording and deployment}
+The field evaluation uses a real parking-lot MP4 containing 9,484 frames at 30 frames/s, spanning 316.13 seconds (5 minutes 16 seconds). Frames are processed at $960\times540$ resolution. The first 120 frames initialize the background model; the remaining 9,364 frames enter operational evaluation. File replay decodes every frame in order, uses frame index divided by frame rate as video time, and runs as fast as processing permits. It exercises the application pipeline with actual recorded imagery.
 
-The evaluation has three complementary, explicitly generated input families:
-\begin{enumerate}
-\item \emph{Controlled motion replay:} 80 background-only warmup frames followed by 100 evaluated $640\times360$ frames at timestamps spaced by 0.05 s. Two moving vehicle-shaped drawings provide 200 ground-truth boxes and foreground masks; a narrow moving distractor is a labeled negative. The actual foreground, tracking, crop-quality, and descriptor code processes these frames.
-\item \emph{Rendered appearance retrieval:} 64 identity-specific drawings supply three gallery variants each, giving 192 gallery descriptors. One held-out variant per identity and 16 unknown identities give 80 queries. Translation, gain, noise, and query blur vary the crops. These are two-dimensional appearance perturbations, not physical camera viewpoints.
-\item \emph{Clustered-vector diagnostics:} normalized 602-dimensional Gaussian identity centers receive independent noise with standard deviation 0.018. Five gallery observations per identity produce galleries of 100, 1,000, 5,000, and 10,000 vectors. Each size has 100 independently generated queries. This isolates search behavior under a specified angular distribution.
-\end{enumerate}
-The fixed data seed is 2026. Each index is constructed with three plane seeds. Five untimed query warmups precede five timed repetitions per query, with interleaved randomized method order. Timing includes projection, bucket collection, eligibility filtering, exact candidate scoring, and bounded top-10 selection. Complete rankings for accuracy are computed outside the timer. The archive retains raw per-query repetitions, generated descriptor inputs, parameters, package versions, and source fingerprints. The reported run is \texttt{paper-local-20260914} under the project's experiment results.
+The LAN deployment includes a Latitude laptop node equipped with an Intel Core i5-2520M. The present video experiment is a single-node replay on the local Windows host, with remote nodes inactive. The archived LSH timing suite likewise records a local Windows host and pins OpenCV and BLAS to one thread~\cite{numpyglobal}. Reported throughput and query timings belong to those local runs; the i5 node describes the LAN deployment and was not benchmarked in these experiments. The research-suite environment records Python 3.14.3, NumPy 2.5.3, SciPy 1.18.1, and OpenCV 4.14.0.94.
 
-\subsubsection{Evaluation metrics}
-One-to-one box matching at IoU $\ge0.5$ supplies true positives (TP), false positives (FP), and false negatives (FN):
+\subsubsection{Human review and metric scope}
+The reviewer starts replay in the browser. Each \texttt{MATCH} decision contributes a frozen pair consisting of the current object crop and the selected earlier exemplar. The reviewer approves a pair if both show the same physical object and rejects it otherwise. The queue excludes \texttt{NO\_MATCH} and \texttt{UNCERTAIN}. Review labels are stored separately from the application's predictions; the final report is exported after both video completion and completion of every queued review.
+
+Let $\mathcal M$ be the set of accepted match decisions, and let $y_i=1$ indicate human approval of pair $i$, with $y_i=0$ indicating rejection. Accepted-match precision is
 \begin{equation}
 \begin{aligned}
-\mathrm{Precision}&=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FP}},\quad
-\mathrm{Recall}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}},\\
-F_1&=\frac{2\mathrm{TP}}{2\mathrm{TP}+\mathrm{FP}+\mathrm{FN}},\\
-\mathrm{IoU}(A,B)&=\frac{|A\cap B|}{|A\cup B|},\quad
-\mathrm{Dice}(A,B)=\frac{2|A\cap B|}{|A|+|B|}.
+n_{\mathrm{a}}&=\sum_{i\in\mathcal M}y_i,\qquad
+n_{\mathrm{r}}=|\mathcal M|-n_{\mathrm{a}},\\
+P_{\mathrm{match}}&=\frac{n_{\mathrm{a}}}{n_{\mathrm{a}}+n_{\mathrm{r}}}.
 \end{aligned}
+\label{eq:review}
 \end{equation}
-Mask scores aggregate pixel counts across evaluated frames; mean box IoU uses matched pairs. Detection candidates and confirmed tracks are scored separately so confirmation delay remains visible.
+Here $n_{\mathrm{a}}$ and $n_{\mathrm{r}}$ count approved and rejected pairs. Since every reviewed prediction is positive, agreement on this selected set equals its precision. Unreviewed non-matches do not establish true-negative or false-negative counts; full recall, F1, rank-1, mAP, and detection/mask accuracy therefore are not inferred from this protocol. Repeated confirmations of a tracked object are valid review events but are not independent physical identities or cross-camera transitions.
 
-For a query $q$, let $R_q$ be the number of eligible relevant gallery descriptors, $r_q(k)$ the relevance at candidate rank $k$, and $P_q(k)$ precision through that rank. Then
-\begin{equation}
-\begin{aligned}
-\mathrm{AP}(q)&=\frac{1}{R_q}\sum_{k=1}^{|\mathcal K_q|}P_q(k)r_q(k),\\
-\mathrm{mAP}&=\frac{1}{|Q^+|}\sum_{q\in Q^+}\mathrm{AP}(q).
-\end{aligned}
-\end{equation}
-The denominator includes all eligible positives, including those missed by hashing. $Q^+$ contains queries with a relevant gallery observation; unknown queries are scored separately at the fixed acceptance threshold. Rank-1 measures correct identity at first rank. Exact-top-1 candidate recall instead asks whether the exhaustive nearest descriptor is retained in the candidate set; these are distinct measures.
+The primary artifacts are \texttt{metrics\_live.json} and \texttt{match\_reviews.csv} in the \texttt{video-review} experiment directory. Percentages in this paper are recomputed from the individual review labels, which agree with the archived integer counts. The archive also retains frame indices, timestamps, decision evidence, input checksum, and the exact two images for each reviewed pair.
 
-We additionally report candidate fraction, index build time, estimated reachable index memory, and shared gallery-vector bytes. Query latency is summarized by the median of repetitions per query, then the query median per seed. Table~\ref{tab:search} averages these seed-level medians and seed-level speed ratios. Query bootstrap intervals in the JSON archive are conditional on a fixed dataset and seed; temporally adjacent frames are not treated as independent population samples.
-
-\subsubsection{Baseline methods}
-The primary comparator is vectorized exhaustive cosine search on the same normalized vectors, exclusions, and top-10 selection task. LSH settings are $(L,b,r)=(8,12,0),(8,12,1),(8,16,1),(16,12,1)$. Descriptor ablations zero one block at a time and renormalize, using exhaustive retrieval to isolate representation effects. The earlier box envelope is replayed on identical motion frames. No learned baseline is claimed to have been trained or evaluated.
-
-\subsection{Quantitative Results}
-Table~\ref{tab:vision} reports the controlled motion results. Candidate boxes achieve complete detection of the 200 labeled object instances. Confirmation reduces recall to 0.95 because two tracks each require five initial unconfirmed observations before the sixth hit. No matched-track identity switch occurs in this separated-motion sequence. Both earlier and tightened size gates produce the same scores on these target sizes, showing preservation of these accepted objects rather than an empirical precision gain over the older gates.
-
-\begin{table}[t]
-\centering\small
-\caption{Controlled synthetic motion replay: 100 evaluated frames, 200 target boxes.}
-\label{tab:vision}
-\begin{tabular}{lrr}
-\toprule Metric & Candidates & Confirmed tracks\\\midrule
-TP / FP / FN & 200 / 0 / 0 & 190 / 0 / 10\\
-Precision & 1.0000 & 1.0000\\
-Recall & 1.0000 & 0.9500\\
-F1 & 1.0000 & 0.9744\\
-Mean matched-box IoU & 0.8438 & 0.8356\\\midrule
-Foreground mask IoU & \multicolumn{2}{c}{0.7405}\\
-Foreground mask Dice & \multicolumn{2}{c}{0.8509}\\
-Matched-track switches & \multicolumn{2}{c}{0}\\
-Admitted confirmed crops & \multicolumn{2}{c}{190 / 190}\\\bottomrule
-\end{tabular}
-\end{table}
+\subsubsection{Comparison with competing approaches}
+Table~\ref{tab:baselines} compares three published Re-ID methods already discussed in Related Work: TransReID, GiT, and SSBVER. They cover pure transformers, graph/transformer interaction, and self-supervised enhancement, respectively. The comparison concerns representation construction and deployment requirements. None was evaluated on this recording, so their published benchmark rankings cannot be used to claim an accuracy win here. VeRi~\cite{veri2016} provides a suitable common benchmark for a future numerical comparison.
 
 \begin{table*}[t]
 \centering\small
-\caption{Default LSH versus exhaustive cosine search. Times are milliseconds; averages cover three index seeds. Generated-vector results measure index behavior, not field Re-ID accuracy.}
-\label{tab:search}
-\begin{tabular}{lrrrrrrr}
-\toprule Input & $N$ & Scan ms & LSH ms & Speedup & Candidates & Exact-top-1 recall & LSH mAP\\\midrule
-Clustered vectors & 100 & 0.0095 & 0.0441 & $0.22\times$ & 7.10\% & 96.67\% & 0.9573\\
-Clustered vectors & 1,000 & 0.0356 & 0.0510 & $0.70\times$ & 3.00\% & 96.33\% & 0.9547\\
-Clustered vectors & 5,000 & 0.2976 & 0.1033 & $2.88\times$ & 2.70\% & 96.67\% & 0.9487\\
-Clustered vectors & 10,000 & 1.0805 & 0.2267 & $4.77\times$ & 2.63\% & 98.33\% & 0.9527\\
-Rendered MVSV-G & 192 & 0.0130 & 0.0757 & $0.17\times$ & 84.24\% & 99.58\% & 0.5942\\\bottomrule
+\caption{Comparison with three published Re-ID approaches. Entries summarize the cited methods, not a shared-data accuracy or runtime experiment.}
+\label{tab:baselines}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{p{0.14\textwidth}p{0.26\textwidth}p{0.24\textwidth}p{0.27\textwidth}}
+\toprule Method & Appearance representation & Representation preparation & Deployment distinction\\\midrule
+TransReID~\cite{transreid2021} & Transformer patches, jigsaw module, camera/view embeddings & Learned transformer and Re-ID training & Models global appearance and acquisition context through learned features.\\
+GiT~\cite{git2023} & Local correction graphs interacting with transformers & Learned graph and transformer parameters & Couples local detail with global appearance through interacting blocks.\\
+SSBVER~\cite{ssbver2023} & Backbone features enhanced by self-supervision & Supervised and self-supervised training & Training improves the backbone without adding deployment modules.\\
+Proposed system & Masked color, LBP, gradients, and statistics; 602 values & Fixed feature rules; seeded random projections; no representation training & Integrates foreground-to-crop processing, mutable LSH retrieval, and reviewable object pairs.\\\bottomrule
 \end{tabular}
 \end{table*}
 
-The indexed search achieves a $2.88\times$ speedup at 5,000 vectors and $4.77\times$ at 10,000 vectors (Table~\ref{tab:search}). At the largest size, only 2.63\% of the gallery is scored and exact-top-1 candidate recall is 98.33\%. Rank-1 identity accuracy on these well-separated generated clusters is 1.0, whereas LSH mAP is 0.9527 because some relevant exemplars are omitted. Exhaustive mAP is 1.0 on this diagnostic. The speedup ranges from 4.74 to 4.79 across the three seeds, showing repeatability for this fixed distribution and machine.
+The proposed system's concrete advantage is operational simplicity: no learned representation must be fitted before deployment, and its feature construction and retrieval evidence are inspectable. Learned approaches pursue richer invariance across identities and viewpoints. A shared-data evaluation is needed to quantify the recognition and runtime tradeoff, so Table~\ref{tab:baselines} distinguishes design properties rather than assigning an unsupported overall rank.
 
-The rendered descriptor gallery provides a different and useful regime. Exact search obtains rank-1 of 0.6406 and mAP of 0.5962; default LSH mAP is 0.5942. Here hashing preserves nearly all exact nearest candidates but visits 84.24\% of the gallery, leaving insufficient savings to offset lookup overhead. Table~\ref{tab:ablation} explains an associated representation effect: removing color increases mAP to 0.7087 on the held-out brightness-shifted drawings, whereas removing structure reduces it to 0.5063. This identifies photometric robustness as a productive refinement and confirms useful structural evidence in this controlled test.
+\subsection{Quantitative Parking-Lot Results}
+Table~\ref{tab:parking} summarizes the complete recording. Processing produces 5,160 candidate-box instances and 3,946 confirmed-track frame instances, with no frame-processing errors. These are accumulated processing counts; one object can contribute on several frames. The 214 observation decisions include 13 accepted matches, 179 uncertain outcomes, 16 non-matches, and six quality skips. The final gallery contains 16 system-assigned identities, which are not ground-truth vehicle counts.
 
 \begin{table}[t]
 \centering\small
-\caption{Descriptor ablation on 64 known rendered queries using exhaustive search. The 16 unknown queries are evaluated separately.}
-\label{tab:ablation}
-\begin{tabular}{lrr}
-\toprule Descriptor & Rank-1 & mAP\\\midrule
-Full MVSV-G & 0.6406 & 0.5962\\
-Without color & 0.7656 & 0.7087\\
-Without texture & 0.6406 & 0.5963\\
-Without structure & 0.5313 & 0.5063\\
-Without statistics & 0.6406 & 0.5886\\\bottomrule
+\caption{Real parking-lot replay: 9,484 frames over 316.13 s. Precision uses human labels for accepted matches only.}
+\label{tab:parking}
+\begin{tabular}{lr}
+\toprule Measurement & Result\\\midrule
+Input resolution / frame rate & $960\times540$ / 30 FPS\\
+Warmup / evaluated frames & 120 / 9,364\\
+Candidate-box instances & 5,160\\
+Confirmed-track frame instances & 3,946\\
+Frame-processing errors & 0\\
+Observation decisions & 214\\
+Matches / uncertain outcomes & 13 / 179\\
+Non-matches / quality skips & 16 / 6\\\midrule
+Reviewed / queued matches & 13 / 13\\
+Approved / rejected pairs & 9 / 4\\
+Accepted-match precision & 69.23\%\\\midrule
+Replay wall time & 130.72 s\\
+Wall-clock replay throughput & 72.55 FPS\\
+Mean frame-processing time & 11.32 ms\\
+Processing-only throughput & 88.30 FPS\\\bottomrule
 \end{tabular}
 \end{table}
 
+All 13 accepted matches receive a human label. Nine are approved and four rejected, yielding $P_{\mathrm{match}}=9/13=69.23\%$ with complete review coverage. This demonstrates visible, verifiable associations on real parking-lot imagery and identifies erroneous accepted pairs directly. The frame count and duration describe exposure to the scene, while the review count defines the evidence supporting precision. The large uncertain category shows that the fixed policy frequently withholds acceptance; those outcomes remain outside the measured precision denominator.
+
+\subsection{LSH Query Speed and Scaling}
+The separate search experiment uses synthetic normalized 602-dimensional vectors to isolate querying speed from image acquisition and descriptor extraction. Gaussian identity centers receive independent noise with standard deviation 0.018, with five gallery vectors per center. Gallery sizes are 100, 1,000, 5,000, and 10,000, each with 100 independently generated queries. Data seed 2026 is fixed; plane seeds 17, 29, and 43 repeat index construction. These generated vectors are used only for the index-scaling experiment, not for the parking-lot precision result.
+
+The numerical baseline is vectorized exhaustive cosine search on the same vectors and eligibility conditions. Five untimed query warmups precede five timed repetitions per query, with randomized interleaving of methods. Timing covers projection, probing, candidate collection, eligibility filtering, exact scoring, and top-10 selection. For each seed, the query latency is the median of per-query repetition medians; Table~\ref{tab:search} averages those seed-level values and their paired scan/LSH ratios. The archived source is \texttt{paper-local-20260914}.
+
+\begin{table*}[t]
+\centering\small
+\caption{Synthetic-vector query-speed benchmark: default LSH versus exhaustive cosine, averaged across three index seeds. Exact-neighbor retention is an index fidelity check, not vehicle identity accuracy.}
+\label{tab:search}
+\begin{tabular}{rrrrrr}
+\toprule Gallery size & Scan (ms) & LSH (ms) & Scan/LSH speedup & Candidate fraction & Exact-top-1 retention\\\midrule
+100 & 0.0095 & 0.0441 & $0.22\times$ & 7.10\% & 96.67\%\\
+1,000 & 0.0356 & 0.0510 & $0.70\times$ & 3.00\% & 96.33\%\\
+5,000 & 0.2976 & 0.1033 & $2.88\times$ & 2.70\% & 96.67\%\\
+10,000 & 1.0805 & 0.2267 & $4.77\times$ & 2.63\% & 98.33\%\\\bottomrule
+\end{tabular}
+\end{table*}
+
+Candidate fraction is the number of unique scored candidates divided by eligible gallery size, averaged across queries. Exact-top-1 retention is the fraction of queries whose exhaustive nearest descriptor survives candidate generation. This fidelity check accompanies latency so that reduced work is not mistaken for equally complete retrieval. At 10,000 vectors, the index scores 2.63\% of the gallery, retains the exact nearest candidate for 98.33\% of queries, and achieves a $4.77\times$ speedup. Speedup ranges from 4.74 to 4.79 across the three seeds. At 5,000 vectors it reaches $2.88\times$; at the two smaller sizes, the vectorized scan is faster. The measured advantage therefore applies to the larger tested galleries and their angular distribution, not automatically to the small online gallery of the video run.
+
 \subsection{Qualitative Analysis}
-Figure~\ref{fig:qualitative} shows an actual frame from the controlled replay, its processed mask, and confirmed boxes. The thin distractor is removed while the two substantial components remain separate. The mask score is lower than the box score because agreement of enclosing rectangles does not imply identical silhouettes. Component-specific support makes this distinction observable at the crop boundary.
-
-\begin{figure*}[t]
-\centering
-\includegraphics[width=\textwidth]{paper_figures/qualitative.png}
-\caption{Controlled synthetic replay example generated by the same fixture and processed by the implemented foreground/tracker code. Left: input with a thin negative distractor. Center: cleaned foreground. Right: current confirmed boxes (orange), compared with ground-truth boxes (green). This is a diagnostic illustration, not captured LAN footage.}
-\label{fig:qualitative}
-\end{figure*}
-
-The color ablation illustrates why adding feature blocks should be evaluated rather than presumed beneficial. Global appearance summaries remain concentrated in a limited portion of angular space on these drawings, which also produces high bucket occupancy. The monitor's paired thumbnails offer a practical way to inspect confusing matches during subsequent labeled camera runs, linking a retrieved identifier back to visible evidence.
-
-\subsection{Runtime Performance}
-The tightened-gate replay processes approximately 71.71 frames/s locally for foreground, tracking, crop-quality checks, and admitted descriptor extraction. This processing throughput excludes camera acquisition, asynchronous communication, and monitor display; it is therefore distinct from the application's 24-frame/s capture cap. At 10,000 vectors, the default index requires approximately 261.44 ms to build and 13.69 MB of estimated index memory, alongside 24.08 MB of shared float32 gallery vectors. These memory figures describe reachable Python/NumPy objects, not operating-system peak resident memory.
-
-The small-gallery measurements are equally informative: exhaustive retrieval is faster at 100 and 1,000 diagnostic vectors and about 5.8 times faster for the 192 rendered descriptors. Figure~\ref{fig:latency} displays the measured scale transition. Consequently, the useful operating region depends on both gallery size and descriptor distribution. Candidate count and wall-clock timing must be considered together when selecting an index.
+The review interface presents the exact observation and reference crops used by each accepted decision. Figure~\ref{fig:review} shows one approved and one rejected pair from the archived parking-lot run. The approved pair shows consistent vehicle appearance. The rejected pair contains partial foreground over roadway rather than clear whole-vehicle crops, illustrating that geometric and quality gates can still admit ambiguous evidence. Displaying both stored images makes the reviewer's judgment assessable in a way that an identity tag alone cannot.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{paper_figures/search_latency.pdf}
-\caption{Measured query latency for generated clustered vectors. The default index amortizes its lookup overhead at the larger tested gallery sizes. Each point averages three seed-level query medians.}
-\label{fig:latency}
+\begin{tabular}{cc}
+\small Current observation & \small Earlier exemplar\\
+\includegraphics[width=0.43\columnwidth,height=0.22\columnwidth,keepaspectratio]{paper_figures/parking-approved-observation.jpg} &
+\includegraphics[width=0.43\columnwidth,height=0.22\columnwidth,keepaspectratio]{paper_figures/parking-approved-candidate.jpg}\\
+\multicolumn{2}{c}{\small (a) Human-approved match, frame 646}\\[3pt]
+\includegraphics[width=0.43\columnwidth,height=0.22\columnwidth,keepaspectratio]{paper_figures/parking-rejected-observation.jpg} &
+\includegraphics[width=0.43\columnwidth,height=0.22\columnwidth,keepaspectratio]{paper_figures/parking-rejected-candidate.jpg}\\
+\multicolumn{2}{c}{\small (b) Human-rejected match, frame 1442}
+\end{tabular}
+\caption{First approved and first rejected pairs in review order, extracted unchanged from the stored parking-lot review images. Labels reflect the recorded reviewer judgments.}
+\label{fig:review}
 \end{figure}
 
+Component support, bounded crops, and exact candidate previews provide an auditable chain from pixels to a proposed association. Human labels assess the final pair; they do not separately measure box localization or segmentation boundaries. The preserved evidence makes subsequent analysis of lighting, partial foreground, and competing vehicles possible without reconstructing the live gallery.
+
+\subsection{Runtime Performance}
+The 316.13-second recording completes in 130.72 seconds of wall time, corresponding to 72.55 decoded frames/s and approximately $2.42\times$ the source playback rate on the replay host. Mean successful frame-processing time is 11.32 ms, corresponding to 88.30 processing frames/s. The latter includes warmup, JPEG encoding, and per-frame application work but excludes capture/network wait; wall throughput uses the complete replay interval. Reviewer activity can overlap processing, and time spent after video completion is excluded from replay throughput. These figures measure file replay, not multi-node network throughput or the frame rate of the i5 deployment node.
+
+The results show sufficient processing capacity for this recording's 30-frame/s timeline on the measured host. LSH query speed is reported separately because it times a retrieval primitive rather than the entire frame pipeline. As the gallery grows, the measured reduction in candidate scoring supplies a practical route to controlling retrieval cost without changing the descriptor definition.
+
 \subsection{Discussion}
-The results support an explicit and efficient visual retrieval path under controlled conditions. They also resolve several potential ambiguities. A valid region is a geometrically and temporally supported foreground observation, not a semantic category prediction. An embedding is a reproducible feature map; its similarity depends on the information retained by its blocks. A binary signature is a candidate-routing mechanism, with exact scoring required after collision. These distinctions make the method easier to audit and improve.
+The field run establishes that the complete application can decode a parking-lot sequence, maintain coherent observations, propose associations, and preserve enough evidence for human verification. Its 69.23\% accepted-match precision is an explicit operating-point measurement. The uncertain outcomes and four rejected pairs point to threshold calibration and appearance discrimination as useful next improvements. Wider camera coverage and independently reviewed non-accepted outcomes would extend this evaluation to missed associations and cross-camera identity retrieval.
 
-The principal experimental boundary is external validity. The motion drawings and perturbed crops are synthetic fixtures, and the Gaussian experiment is a search diagnostic. They exercise actual executable code and provide exact labels, but they do not establish cross-camera recognition accuracy on real footage. Synthetic evaluation has a clear precedent in Synthehicle~\cite{synthehicle2023}; our simpler generator offers much less scene and viewpoint diversity. Exhaustive-search baselines and joint quality--time--space reporting follow established ANN evaluation practice~\cite{lv2007multiprobe,annchallenge2022}. These precedents justify the evaluation questions and reporting method, not an equivalence between our inputs and published benchmarks.
-
-One calibration result deserves explicit attention: all 16 unknown rendered queries are accepted at the diagnostic cosine threshold of 0.82 by both exhaustive search and default LSH. Thus the visual threshold alone does not provide reliable open-set rejection on these inputs. This result concerns the isolated cosine diagnostic, not an evaluated end-to-end live fusion decision. Together with the color ablation, it motivates independently calibrated thresholds, difficult negative examples, and photometric preprocessing. Crowded occlusion, camera movement, small distant targets, and stopped objects absorbed into the background also require broader evaluation.
-
-To support that next step, every application run now writes \texttt{metrics\_live.json}, a unique run archive, and an observation-label template. Counts and measured processing times are available without labels. Identity precision, recall, and F1 are computed only after independent annotation, with resolution and annotation coverage reported. Undefined accuracy remains null rather than being inferred from generated IDs. Separate labeled frame and crop manifests allow the offline suite to evaluate real masks, boxes, and ranked retrieval. This provides a direct route from the present reproducible diagnostics to a field study with a held-out calibration/test split.
+The methodological distinctions are deliberate: geometric and temporal support establish an operational object region; the descriptor summarizes its masked appearance; LSH narrows the candidate set; exact scoring and the acceptance policy produce a decision; and human review supplies a label for that decision. Each stage has a different role, so neither a valid bounding box nor a hash collision alone establishes identity. This separation supports targeted improvements while keeping the current measurements traceable to recorded inputs and reviewer judgments.
 
 \section{Conclusion and Future Work}
-This paper presents a transparent classical object Re-ID pipeline linking coherent foreground support, tighter bounding boxes, a masked 602-dimensional descriptor, mutable random-hyperplane tables, and exact candidate verification. The implementation makes the role of each stage explicit and preserves visual evidence alongside retrieved identities. Controlled replay demonstrates stable object formation on the tested sequence, while the 10,000-vector diagnostic demonstrates a 4.77-fold query speedup with 98.33\% exact-top-1 candidate recall. The contrast with concentrated image descriptors establishes a practical, distribution-dependent efficiency envelope.
+We present a classical object Re-ID system linking foreground support, constrained bounding boxes, masked 602-dimensional descriptors, mutable random-hyperplane tables, and exact candidate verification. A real parking-lot evaluation covers 9,484 frames over 316.13 seconds, with no frame-processing errors, 72.55 FPS wall-clock replay throughput, and 69.23\% precision among human-reviewed accepted matches. A separate synthetic-vector query benchmark demonstrates a $4.77\times$ LSH speedup at 10,000 vectors with 98.33\% exact-neighbor retention. Together, these results establish a working visual pipeline and a measured search-scaling benefit.
 
-Future work will prioritize independently labeled multi-camera footage, photometric robustness, validation-based open-set calibration, and a measured policy for choosing exhaustive or indexed search. The supplied experiment archive and live annotation exports make those extensions reproducible. The current contribution is a working, mathematically specified baseline whose measured strengths and targeted refinements provide a concrete foundation for further Re-ID research.
+Future work will extend human annotation to non-accepted candidates, calibrate acceptance on held-out recordings, and evaluate shared query/gallery identities across multiple cameras. Photometric normalization and a measured choice between exhaustive and indexed search can improve robustness and small-gallery efficiency. The preserved object pairs, explicit feature construction, and archived run configuration provide a practical foundation for these extensions.
 
-\IEEEtriggercmd{\balance}
-\IEEEtriggeratref{10}
+\clearpage
+\IEEEtriggercmd{\newpage}
+\IEEEtriggeratref{12}
 \begin{thebibliography}{00}
 
 \bibitem{transreid2021}
@@ -552,13 +475,6 @@ J. Wu, L. He, W. Liu, Y. Yang, Z. Lei, T. Mei, and S. Z. Li,
 in \textit{Proc. European Conference on Computer Vision (ECCV)}, 2022.
 
 
-\bibitem{synthehicle2023}
-F. Herzog, J. Chen, T. Teepe, J. Gilg, S. H\"ormann, and G. Rigoll,
-``Synthehicle: Multi-Vehicle Multi-Camera Tracking in Virtual Cities,''
-in \textit{Proc. IEEE/CVF Winter Conference on Applications of Computer Vision Workshops (WACVW)},
-pp. 1--11, Jan. 2023.
-
-
 \bibitem{kamenou2023}
 E. Kamenou, J. Mart\'inez del Rinc\'on, P. Miller, and P. Devlin-Hill,
 ``A Meta-Learning Approach for Domain Generalisation Across Visual Modalities in Vehicle Re-Identification,''
@@ -571,6 +487,12 @@ X. Yi, Q. Wang, Q. Liu, Y. Rui, and B. Ran,
 ``Advances in vehicle re-identification techniques: A survey,''
 \textit{Neurocomputing}, vol. 614, art. 128745, Jan. 2025.
 
+
+\bibitem{detlsh2024}
+J. Wei, B. Peng, X. Lee, and T. Palpanas,
+``DET-LSH: A Locality-Sensitive Hashing Scheme with Dynamic Encoding Tree for Approximate Nearest Neighbor Search,''
+\textit{Proceedings of the VLDB Endowment}, vol. 17, no. 9, pp. 2241--2254, 2024,
+doi: 10.14778/3665844.3665854.
 
 \bibitem{dblsh2022}
 Y. Tian, X. Zhao, and X. Zhou,
@@ -641,12 +563,6 @@ Q. Lv, W. Josephson, Z. Wang, M. Charikar, and K. Li,
 ``Multi-Probe LSH: Efficient Indexing for High-Dimensional Similarity Search,''
 in \textit{Proc. International Conference on Very Large Data Bases (VLDB)},
 pp. 950--961, 2007.
-
-
-\bibitem{grabcut2004}
-C. Rother, V. Kolmogorov, and A. Blake,
-``GrabCut: Interactive Foreground Extraction using Iterated Graph Cuts,''
-\textit{ACM Transactions on Graphics}, vol. 23, no. 3, pp. 309--314, 2004.
 
 
 \bibitem{orb2011}
