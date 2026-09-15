@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.3.11)  15 SEP 2026 12:30
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.3.11)  15 SEP 2026 13:32
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -594,51 +594,43 @@ File: mt-msb.cfg 2005/06/01 v1.0 microtype config. file: AMS symbols (b) (RS)
 /opt/MiKTex/fonts/enc/dvips/base/8r.enc}
 
 
-] [2] [3]
+] [2] [3] [4]
 LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 2
-87.
+73.
  (E:\opt\MiKTex\tex/latex/psnfss\ot1pcr.fd
 File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
 )
 Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on in
-put line 290.
-
-Underfull \vbox (badness 1052) has occurred while \output is active []
-
- [4]
-Underfull \hbox (badness 2512) in paragraph at lines 358--358
-[]\OT1/ptm/m/n/9 (+20) Supervised and self-supervised
- []
-
-[5]
-<paper_figures/parking-approved-observation.jpg, id=266, 132.495pt x 56.21pt>
+put line 276.
+ [5] [6]
+<paper_figures/parking-approved-observation.jpg, id=281, 132.495pt x 56.21pt>
 File: paper_figures/parking-approved-observation.jpg Graphic file (type jpg)
 <use paper_figures/parking-approved-observation.jpg>
 Package pdftex.def Info: paper_figures/parking-approved-observation.jpg  used o
-n input line 421.
+n input line 409.
 (pdftex.def)             Requested size: 108.3595pt x 45.97069pt.
-<paper_figures/parking-approved-candidate.jpg, id=267, 124.465pt x 54.2025pt>
+<paper_figures/parking-approved-candidate.jpg, id=282, 124.465pt x 54.2025pt>
 File: paper_figures/parking-approved-candidate.jpg Graphic file (type jpg)
 <use paper_figures/parking-approved-candidate.jpg>
 Package pdftex.def Info: paper_figures/parking-approved-candidate.jpg  used on 
-input line 422.
+input line 410.
 (pdftex.def)             Requested size: 108.35963pt x 47.18886pt.
-<paper_figures/parking-rejected-observation.jpg, id=268, 368.37625pt x 137.5137
+<paper_figures/parking-rejected-observation.jpg, id=283, 368.37625pt x 137.5137
 5pt>
 File: paper_figures/parking-rejected-observation.jpg Graphic file (type jpg)
 <use paper_figures/parking-rejected-observation.jpg>
 Package pdftex.def Info: paper_figures/parking-rejected-observation.jpg  used o
-n input line 424.
+n input line 412.
 (pdftex.def)             Requested size: 108.35527pt x 40.4487pt.
-<paper_figures/parking-rejected-candidate.jpg, id=269, 271.0125pt x 86.3225pt>
+<paper_figures/parking-rejected-candidate.jpg, id=284, 271.0125pt x 86.3225pt>
 File: paper_figures/parking-rejected-candidate.jpg Graphic file (type jpg)
 <use paper_figures/parking-rejected-candidate.jpg>
 Package pdftex.def Info: paper_figures/parking-rejected-candidate.jpg  used on 
-input line 425.
+input line 413.
 (pdftex.def)             Requested size: 108.35757pt x 34.51389pt.
- [6] [7 <./paper_figures/parking-approved-observation.jpg> <./paper_figures/par
-king-approved-candidate.jpg> <./paper_figures/parking-rejected-observation.jpg>
- <./paper_figures/parking-rejected-candidate.jpg>]
+ [7 <./paper_figures/parking-approved-observation.jpg> <./paper_figures/parking
+-approved-candidate.jpg> <./paper_figures/parking-rejected-observation.jpg> <./
+paper_figures/parking-rejected-candidate.jpg>]
 
 ** Conference Paper **
 Before submitting the final camera ready copy, remember to:
@@ -661,13 +653,13 @@ Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: CC19BCFAE0487122FB458B47CAC343D1;6203.
  ) 
 Here is how much of TeX's memory you used:
- 15592 strings out of 467871
- 239247 string characters out of 5433264
- 708764 words of memory out of 5000000
- 43784 multiletter control sequences out of 15000+600000
- 694747 words of font info for 386 fonts, out of 8000000 for 9000
+ 15573 strings out of 467871
+ 239053 string characters out of 5433264
+ 705166 words of memory out of 5000000
+ 43782 multiletter control sequences out of 15000+600000
+ 693951 words of font info for 374 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 75i,15n,79p,1003b,584s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 75i,15n,79p,1560b,584s stack positions out of 10000i,1000n,20000p,200000b,200000s
 <E:/opt/MiKTex/fonts/type1/public/amsfonts/cm/cmbx10.pfb><E:/opt/MiKTex/fonts
 /type1/public/amsfonts/cm/cmex10.pfb><E:/opt/MiKTex/fonts/type1/public/amsfonts
 /cmextra/cmex7.pfb><E:/opt/MiKTex/fonts/type1/public/amsfonts/cm/cmmi10.pfb><E:
@@ -682,9 +674,9 @@ ublic/amsfonts/cm/cmsy7.pfb><E:/opt/MiKTex/fonts/type1/public/amsfonts/cm/cmsy9
 ex/fonts/type1/urw/courier/ucrr8a.pfb><E:/opt/MiKTex/fonts/type1/urw/times/utmb
 8a.pfb><E:/opt/MiKTex/fonts/type1/urw/times/utmbi8a.pfb><E:/opt/MiKTex/fonts/ty
 pe1/urw/times/utmr8a.pfb><E:/opt/MiKTex/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (8 pages, 347545 bytes).
+Output written on main.pdf (8 pages, 341928 bytes).
 PDF statistics:
- 400 PDF objects out of 1000 (max. 8388607)
+ 406 PDF objects out of 1000 (max. 8388607)
  99 named destinations out of 1000 (max. 500000)
  66821 words of extra memory for PDF output out of 74296 (max. 10000000)
 
