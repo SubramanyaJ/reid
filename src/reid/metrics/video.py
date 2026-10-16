@@ -18,6 +18,17 @@ from ..runtime import Runtime
 log = logging.getLogger(__name__)
 
 
+def replay_output_path(out=None, prefix='video'):
+    """Choose an unused output directory without creating it until processing starts."""
+    if out is None:
+        stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
+        out = Path('experiments/results') / f'{prefix}-{stamp}-{uuid.uuid4().hex[:8]}'
+    out = Path(out).resolve()
+    if out.exists():
+        raise ValueError('Replay output already exists; choose a new --out directory')
+    return out
+
+
 def replay_video(path, out=None, config=None, fps=None, warmup_seconds=None, *, session=None):
     cfg = load_config(config) if config else deepcopy(DEFAULTS)
     if warmup_seconds is not None:
@@ -28,12 +39,7 @@ def replay_video(path, out=None, config=None, fps=None, warmup_seconds=None, *, 
     runtime = None
     state = 'failed'
     try:
-        if out is None:
-            stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
-            out = Path('experiments/results') / f'video-{stamp}-{uuid.uuid4().hex[:8]}'
-        out = Path(out).resolve()
-        if out.exists():
-            raise ValueError('Replay output already exists; choose a new --out directory')
+        out = replay_output_path(out)
         out.mkdir(parents=True)
         # Separate membership, keys and gallery prevent contamination of LAN state.
         key = Ed25519PrivateKey.generate()

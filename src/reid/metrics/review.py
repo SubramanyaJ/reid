@@ -27,7 +27,7 @@ class ReviewStore:
 
     def record(self, record):
         evidence = record['evidence']
-        if evidence.get('decision') != 'MATCH':
+        if evidence.get('decision') not in ('MATCH', 'UNCERTAIN', 'NO_MATCH'):
             return
         if not evidence.get('matched_event_id') or not evidence.get('matched_global_id'):
             return
@@ -87,7 +87,7 @@ class ReviewStore:
         return {'status': 'human_reviewed' if final and summary['reviewed'] else 'no_comparisons' if final else 'pending_review',
                 'label_source': 'human approval/rejection of preserved observation/candidate image pairs',
                 'match_decisions': summary,
-                'scope': 'Only MATCH decisions are reviewed. Human same-object is the reference. Scores describe accepted matches only; recall/F1 do not measure missed matches or overall retrieval performance.',
+                'scope': 'Preserved candidate pairs are reviewed. MATCH is positive; UNCERTAIN and compared NO_MATCH are negative. Human same-object is the reference. Recall covers reviewed candidates, not missed detections or candidates absent from retrieval.',
                 'unavailable': {'detection_and_mask_accuracy': 'Requires annotated boxes/masks',
                                 'rank1_and_mAP': 'Requires labeled query/gallery identities and complete rankings',
                                 'IDF1_and_MOTA': 'Requires frame-level identity ground truth; not implemented'},

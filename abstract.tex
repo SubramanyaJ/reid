@@ -1,0 +1,53 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath}
+
+% Standalone extended abstract based on main.tex.
+% Compile with: pdflatex abstract.tex
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.65em}
+\linespread{1.06}
+\setlength{\emergencystretch}{1em}
+\pagestyle{plain}
+
+\begin{document}
+
+\begin{center}
+  {\Large\bfseries Object Re-Identification with\\[3pt]
+  Locality Sensitive Hashing\par}
+  \vspace{0.7em}
+  {\normalsize Dr. Jyothi S. Nayak, Sarthaka Mitra G.B,\\
+  Skanda Mahesh, and Subramanya J\par}
+  \vspace{0.3em}
+  {\small Department of CSE, B.M.S. College of Engineering, Bengaluru, India\par}
+  \vspace{0.8em}
+  {\large\bfseries Extended Abstract\par}
+\end{center}
+
+Object re-identification associates observations of the same physical object when continuous tracking is unavailable. Its reliability depends on observation quality and efficient retrieval of earlier appearances. Foreground fragmentation, background contamination, occlusion, and viewpoint changes can undermine similarity measurements before retrieval begins. This work presents a classical, training-free appearance pipeline connecting coherent object formation, masked feature extraction, locality-sensitive hashing (LSH), and exact candidate verification. The vehicle-oriented prototype uses inspectable representations and decisions to study observation quality and search efficiency in CPU-based camera applications.
+
+The pipeline begins with adaptive Gaussian-mixture background subtraction, separating foreground from shadows after a four-second initialization period. Morphological cleaning and limited hole filling reduce noise. Each connected component must contain a substantial foreground core and satisfy normalized width, height, area, occupancy, and aspect-ratio constraints. The core test retains connected fine detail around a valid region while rejecting isolated thin fragments. Temporal association then uses predicted motion, bounding-box overlap, displacement, and scale change to maintain local tracks. Six associated hits and sufficient motion consistency are required for confirmation. Component-specific masks isolate the appearance evidence, and a quality score incorporating crop size, sharpness, foreground fill, visibility, and motion consistency controls admission. These stages define an operational object region; semantic classification is separate.
+
+Each admitted crop is resized with its aspect ratio preserved to a canonical $128\times80$ image and represented by a 602-dimensional descriptor. The descriptor contains 180 color values, 54 texture values, 332 structure values, and 36 statistical values. Regional HSV and Lab histograms and Lab moments encode color distribution; multiscale local binary patterns describe texture; gradient-based features capture structure; and channel statistics summarize appearance and foreground geometry. Masked computation excludes background and padding, while independent block normalization and final unit-length normalization control the contributions of the feature groups. Camera identifiers, timestamps, and ground-truth identities are not appended to the visual representation.
+
+Random-hyperplane LSH maps each descriptor into eight 12-bit signatures. A query probes its own bucket and all one-bit neighbors in each table, yielding 104 bucket lookups before candidate deduplication and eligibility filtering. Full descriptors are retained for exact cosine comparison, so a hash collision nominates a candidate rather than establishing identity. Mutable tables store exemplar references, and reverse mappings support consistent replacement and removal. The live gallery retains at most eight exemplars per identity, balancing observation quality and appearance diversity. Application decisions additionally use available local correspondence and temporal or spatial evidence, with acceptance thresholds and an ambiguity margin allowing uncertain outcomes instead of forcing an association.
+
+\newpage
+
+The complete application is evaluated using a real parking-lot recording containing 9,484 frames over 316.13 seconds at 30 frames/s, processed at $960\times540$ resolution. The initial 120 frames initialize the background model, leaving 9,364 operational frames. The replay completes without frame-processing errors and produces 5,160 candidate-box instances and 3,946 confirmed-track frame instances. These accumulated counts can include repeated observations of the same object. The 214 observation decisions comprise 13 accepted matches, 179 uncertain outcomes, 16 non-matches, and six quality skips. The final gallery contains 16 system-assigned identities, which should not be interpreted as a ground-truth vehicle count.
+
+Human review assesses every accepted match using the frozen current-object crop and the earlier exemplar selected by the system. Of the 13 reviewed pairs, nine are approved and four rejected, giving an accepted-match precision of 69.23\%. Reviewer labels are stored independently and do not modify the predictions or operating thresholds. This result characterizes the accepted decisions in the evaluated recording. Because uncertain and non-match outcomes are excluded from review, the protocol does not establish recall, F1, rank-1 accuracy, or mean average precision. Repeated confirmations are review events rather than independent physical identities or demonstrated cross-camera transitions. Rejected pairs containing partial foreground illustrate that geometric and quality constraints can still admit ambiguous visual evidence.
+
+On the measured Windows replay host, the recording completes in 130.72 seconds, corresponding to a wall-clock throughput of 72.55 frames/s, approximately $2.42$ times the source playback rate. Mean frame-processing time is 11.32 milliseconds, equivalent to 88.30 processing frames/s when capture wait is excluded. These measurements demonstrate sufficient processing capacity for this recording's 30-frame/s timeline on the tested host. They describe the complete replay pipeline and are reported separately from the retrieval benchmark, which measures search alone.
+
+A separate experiment isolates index performance using synthetic normalized 602-dimensional vectors, with galleries of 100, 1,000, 5,000, and 10,000 exemplars. Each size uses 100 independently generated queries and three index seeds. LSH is compared with vectorized exhaustive cosine search under the same eligibility conditions, with warmup, repeated timings, and single-threaded OpenCV and BLAS execution. At 10,000 vectors, mean seed-level query latency decreases from 1.0805 milliseconds for exhaustive search to 0.2267 milliseconds for LSH, giving a $4.77\times$ speedup. The index scores 2.63\% of the gallery and retains the exact nearest candidate for 98.33\% of queries. At 5,000 vectors, the speedup is $2.88\times$; exhaustive search remains faster at 100 and 1,000 vectors. Thus, the measured advantage applies to the larger tested synthetic galleries and does not automatically extend to the small online gallery in the video evaluation.
+
+The contribution is an integrated, auditable connection from foreground support to searchable appearance and reviewable association evidence. The parking-lot study demonstrates a functioning visual pipeline with explicitly scoped precision and runtime measurements, while the synthetic experiment establishes a conditional search-scaling benefit. The limited review sample, large proportion of uncertain outcomes, and fixed heuristic settings motivate further validation. Future work will review non-accepted outcomes, calibrate thresholds on held-out recordings, evaluate shared identities across multiple cameras, and investigate photometric normalization. Selecting between exhaustive and indexed search according to measured gallery behavior can also improve efficiency. Together, these directions target stronger appearance discrimination, broader evaluation, and reliable deployment across camera conditions.
+
+\vspace{0.3em}
+{\small\textbf{Keywords:} Object re-identification; foreground segmentation; masked appearance descriptors; locality-sensitive hashing; cosine similarity.}
+
+\end{document}

@@ -2,6 +2,13 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+pytest-cache-files-*/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
 *.egg-info/
 data/*
 !data/.gitkeep
@@ -9,3 +16,15 @@ config/local/
 *.pem
 *.sqlite*
 experiments/results/
+experiments/collected/
+
+# Local configuration snapshots and disposable build intermediates.
+*.yaml.before-*
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz

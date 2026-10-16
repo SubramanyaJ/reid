@@ -26,6 +26,7 @@ from .reid.gallery import Gallery
 from .segmentation.refine import crop_candidate
 from .storage.database import Database
 from .tracking.tracker import Tracker, iou
+from .visualization.frames import draw_track, encode_frame
 from .visualization.thumbnails import Thumbnails
 
 log = logging.getLogger(__name__)
@@ -120,6 +121,52 @@ class Runtime:
         with self.log_path.open("a", encoding="utf-8") as stream:
             stream.write(canonical(record).decode() + "\n")
 
+    def _observe_track(self, track, tracks, frame, mask, timestamp):
+        """Record a due observation; return False when no crop can be shown."""
+        track.last_observation = timestamp
+        crop, object_mask, visibility = crop_candidate(frame, mask, track.bbox, self.cfg["detection"]["grabcut"], track.foreground_mask)
+        if crop is None:
+            return False
+        occluded = any(other is not track and iou(track.bbox, other.bbox) > .25 for other in tracks)
+        quality, details = observation_quality(crop, object_mask, visibility, track.consistency, occluded)
+        track.quality = quality
+        if quality >= self.cfg["reid"]["min_quality"]:
+            text, confidence = self.plates.recognize(crop)
+            if text:
+                track.readings = (track.readings + [(text, confidence)])[-24:]
+            plate = aggregate(track.readings, self.cfg["plate"]["min_confidence"], self.cfg["plate"]["min_readings"])
+            vector = self.descriptor.extract(crop, object_mask)
+            x, y, w, h = track.bbox
+            position = [float(np.clip((x+w/2) / frame.shape[1], 0, 1)), float(np.clip((y+h/2) / frame.shape[0], 0, 1))]
+            payload = {"vector": vector.tolist(), "plate": plate, "quality": quality, "position": position,
+                       "scale": float(np.clip(w*h / (frame.shape[0]*frame.shape[1]), 0, 1)),
+                       "local": self.local.extract(crop, object_mask)}
+            occupied = {other.global_id for other in tracks if other is not track and other.global_id}
+            gid, evidence = self.gallery.decide(payload, self.node_id, timestamp, occupied, track.global_id)
+            track.evidence = evidence
+            packet = None
+            if gid:
+                track.global_id = gid
+                _, encoded = cv2.imencode(".png", crop)
+                observation_hash = bytes_hash(encoded.tobytes() + object_mask.tobytes())
+                packet = make_packet(self.key, self.node_id, track.local_id, gid, timestamp, observation_hash,
+                                     payload, evidence, self.descriptor.profile)
+            preview_id = packet["transaction"]["event"]["event_id"] if packet else str(uuid.uuid4())
+            if self.review_sink is not None:
+                self.review_sink.capture_preview(preview_id, crop, object_mask)
+            self.thumbnails.put(preview_id, crop, object_mask,
+                {"node_id": self.node_id, "local_id": track.local_id, "global_id": track.global_id,
+                 "timestamp": timestamp, "quality": quality, "plate": plate, "evidence": evidence,
+                 "submitted": packet is not None})
+            track.preview_id = preview_id
+            if packet:
+                self.receive_packet(packet)
+            self.log_decision(track, timestamp, evidence, plate, details)
+        else:
+            self.log_decision(track, timestamp, {"decision": "SKIP_QUALITY"},
+                              {"state": "UNKNOWN", "text": None, "confidence": 0.}, details)
+        return True
+
     def process_frame(self, frame, timestamp, warm=False, reconnect=False):
         processing_start = time.perf_counter()
         if reconnect:
@@ -133,68 +180,16 @@ class Runtime:
         snapshot = []
         for track in tracks:
             if track.state == "CONFIRMED" and timestamp - track.last_observation >= self.cfg["reid"]["observation_interval"]:
-                track.last_observation = timestamp
-                crop, object_mask, visibility = crop_candidate(frame, mask, track.bbox, self.cfg["detection"]["grabcut"], track.foreground_mask)
-                if crop is None:
+                if not self._observe_track(track, tracks, frame, mask, timestamp):
                     continue
-                occluded = any(other is not track and iou(track.bbox, other.bbox) > .25 for other in tracks)
-                quality, details = observation_quality(crop, object_mask, visibility, track.consistency, occluded)
-                track.quality = quality
-                if quality >= self.cfg["reid"]["min_quality"]:
-                    text, confidence = self.plates.recognize(crop)
-                    if text:
-                        track.readings = (track.readings + [(text, confidence)])[-24:]
-                    plate = aggregate(track.readings, self.cfg["plate"]["min_confidence"], self.cfg["plate"]["min_readings"])
-                    vector = self.descriptor.extract(crop, object_mask)
-                    x, y, w, h = track.bbox
-                    position = [float(np.clip((x+w/2) / frame.shape[1], 0, 1)), float(np.clip((y+h/2) / frame.shape[0], 0, 1))]
-                    payload = {"vector": vector.tolist(), "plate": plate, "quality": quality, "position": position,
-                               "scale": float(np.clip(w*h / (frame.shape[0]*frame.shape[1]), 0, 1)),
-                               "local": self.local.extract(crop, object_mask)}
-                    occupied = {other.global_id for other in tracks if other is not track and other.global_id}
-                    gid, evidence = self.gallery.decide(payload, self.node_id, timestamp, occupied, track.global_id)
-                    track.evidence = evidence
-                    packet = None
-                    if gid:
-                        track.global_id = gid
-                        _, encoded = cv2.imencode(".png", crop)
-                        observation_hash = bytes_hash(encoded.tobytes() + object_mask.tobytes())
-                        packet = make_packet(self.key, self.node_id, track.local_id, gid, timestamp, observation_hash,
-                                             payload, evidence, self.descriptor.profile)
-                    preview_id = packet["transaction"]["event"]["event_id"] if packet else str(uuid.uuid4())
-                    if self.review_sink is not None:
-                        self.review_sink.capture_preview(preview_id, crop, object_mask)
-                    self.thumbnails.put(preview_id, crop, object_mask,
-                        {"node_id": self.node_id, "local_id": track.local_id, "global_id": track.global_id,
-                         "timestamp": timestamp, "quality": quality, "plate": plate, "evidence": evidence,
-                         "submitted": packet is not None})
-                    track.preview_id = preview_id
-                    if packet:
-                        self.receive_packet(packet)
-                    self.log_decision(track, timestamp, evidence, plate, details)
-                else:
-                    self.log_decision(track, timestamp, {"decision": "SKIP_QUALITY"},
-                                      {"state": "UNKNOWN", "text": None, "confidence": 0.}, details)
-            x, y, w, h = np.rint(track.bbox).astype(int)
-            color = (0, 103, 255) if track.state == "CONFIRMED" else (240, 240, 0)
-            cv2.rectangle(annotated, (x, y), (x+w, y+h), color, 2)
-            if track.state == "CONFIRMED" and track.foreground_mask is not None:
-                contours, _ = cv2.findContours(track.foreground_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                cv2.drawContours(annotated, contours, -1, (240, 240, 0), 1, offset=(x, y))
-            gid_label = track.global_id[:10] if track.global_id else "UNASSIGNED"
-            visual = track.evidence.get("visual_score")
-            score_label = f" V:{visual:.2f}" if visual is not None else ""
-            cv2.putText(annotated, f"{track.local_id} {gid_label}{score_label}", (max(0, x), max(16, y-6)),
-                        cv2.FONT_HERSHEY_SIMPLEX, .45, color, 1, cv2.LINE_AA)
+            draw_track(annotated, track)
             snapshot.append({"local_id": track.local_id, "global_id": track.global_id, "state": track.state,
                              "quality": track.quality, "evidence": track.evidence,
                              "preview_url": self.preview_url(self.node_id, track.preview_id)})
-        if warm:
-            cv2.putText(annotated, "BACKGROUND WARMUP", (20, 32), cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 103, 255), 2)
-        ok, jpeg = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 78])
+        jpeg = encode_frame(annotated, warm)
         with self.lock:
-            if ok:
-                self.jpeg = jpeg.tobytes()
+            if jpeg is not None:
+                self.jpeg = jpeg
             self.metrics.update(detections=self.tracker.candidate_count if not warm else 0, raw_regions=len(components), tracks=snapshot,
                 candidate_count=max((t.evidence.get("candidate_count", 0) for t in tracks), default=0),
                 frames=self.metrics["frames"] + 1, mask_fraction=float((mask > 0).mean()),

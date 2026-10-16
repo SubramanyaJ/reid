@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.3.11)  18 SEP 2026 10:42
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.3.11)  28 SEP 2026 09:57
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -653,6 +653,10 @@ Before submitting the final camera ready copy, remember to:
 LaTeX2e <2025-11-01>
 L3 programming layer <2025-12-24>
  ***********
+
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
 Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: E6D91CF3FD01C544104FDD4C787D4AC3;5946.
  ) 
@@ -678,7 +682,7 @@ ublic/amsfonts/cm/cmsy7.pfb><E:/opt/MiKTex/fonts/type1/public/amsfonts/cm/cmsy9
 ex/fonts/type1/urw/courier/ucrr8a.pfb><E:/opt/MiKTex/fonts/type1/urw/times/utmb
 8a.pfb><E:/opt/MiKTex/fonts/type1/urw/times/utmbi8a.pfb><E:/opt/MiKTex/fonts/ty
 pe1/urw/times/utmr8a.pfb><E:/opt/MiKTex/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (8 pages, 337526 bytes).
+Output written on main.pdf (8 pages, 337537 bytes).
 PDF statistics:
  392 PDF objects out of 1000 (max. 8388607)
  96 named destinations out of 1000 (max. 500000)

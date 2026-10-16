@@ -1,24 +1,11 @@
-import json
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
+from .http import read_json
 
 
 def create_app(runtime):
     app = FastAPI(title="Classical Re-ID Peer", lifespan=runtime.lifespan, docs_url=None, redoc_url=None)
-
-    async def body(request):
-        data = bytearray()
-        async for chunk in request.stream():
-            data.extend(chunk)
-            if len(data) > runtime.cfg["network"]["max_body_bytes"]:
-                raise HTTPException(413, "Request too large")
-        try:
-            def reject_constant(value):
-                raise ValueError("Nonfinite JSON number")
-            return json.loads(data, parse_constant=reject_constant)
-        except (ValueError, UnicodeDecodeError):
-            raise HTTPException(400, "Invalid JSON")
 
     @app.get("/", response_class=HTMLResponse)
     def monitor():
@@ -82,7 +69,7 @@ def create_app(runtime):
     @app.post("/peer/transaction")
     async def transaction(request: Request):
         try:
-            runtime.receive_packet(await body(request))
+            runtime.receive_packet(await read_json(request, runtime.cfg["network"]["max_body_bytes"]))
             return {"accepted": True}
         except (ValueError, KeyError, TypeError) as error:
             raise HTTPException(400, str(error))
@@ -90,14 +77,14 @@ def create_app(runtime):
     @app.post("/peer/proposal")
     async def proposal(request: Request):
         try:
-            return runtime.consensus.vote(await body(request))
+            return runtime.consensus.vote(await read_json(request, runtime.cfg["network"]["max_body_bytes"]))
         except (ValueError, KeyError, TypeError) as error:
             raise HTTPException(409, str(error))
 
     @app.post("/peer/commit")
     async def commit(request: Request):
         try:
-            block = await body(request)
+            block = await read_json(request, runtime.cfg["network"]["max_body_bytes"])
             runtime.ledger.accept(block)
             runtime.apply_block(block)
             return {"accepted": True}

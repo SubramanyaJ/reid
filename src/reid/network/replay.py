@@ -1,16 +1,14 @@
 """Local browser-controlled replay and persistent human match review."""
 import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-import json
 from pathlib import Path
 import threading
-import uuid
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from ..cameras.video import VideoFile
 from ..metrics.review import ReviewStore
-from ..metrics.video import replay_video
+from ..metrics.video import replay_video, replay_output_path
+from .http import read_json
 
 
 class ReplaySession:
@@ -18,10 +16,7 @@ class ReplaySession:
         probe = VideoFile(video, fps)
         self.video, self.metadata = str(probe.path), dict(probe.metadata)
         probe.close()
-        stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
-        self.out = Path(out or f'experiments/results/review-{stamp}-{uuid.uuid4().hex[:8]}').resolve()
-        if self.out.exists():
-            raise ValueError('Replay output already exists; choose a new --out directory')
+        self.out = replay_output_path(out, prefix='review')
         self.config, self.fps, self.warmup = config, fps, warmup_seconds
         self.lock, self.stop = threading.RLock(), threading.Event()
         self.runtime = self.store = self.thread = None
@@ -140,13 +135,8 @@ def create_replay_app(session):
 
     @app.post('/api/review')
     async def review(request: Request):
-        data = bytearray()
-        async for chunk in request.stream():
-            data.extend(chunk)
-            if len(data) > 2048:
-                raise HTTPException(413, 'Review payload too large')
+        value = await read_json(request, 2048)
         try:
-            value = json.loads(data)
             if not isinstance(value, dict) or set(value) != {'observation_id', 'same_object'}:
                 raise ValueError('Provide observation_id and same_object')
             if not isinstance(value['observation_id'], str) or len(value['observation_id']) > 100:

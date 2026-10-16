@@ -12,6 +12,9 @@ dependencies = ["numpy>=1.24,<3", "opencv-python>=4.8,<5", "scipy>=1.10,<2", "Py
 [project.scripts]
 reid = "reid.cli:main"
 
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
