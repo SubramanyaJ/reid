@@ -1,10 +1,62 @@
-# Existing three-node LAN deployment
+# LAN deployment and independent node startup
 
 [Project overview](README.md) · [New deployment setup](docs/setup.md)
 
+## Set up machines with local keys
+
+For a new deployment, install Python 3.10 or newer and run the matching command on **every machine**. It downloads [SubramanyaJ/reid](https://github.com/SubramanyaJ/reid) without requiring Git:
+
+```powershell
+# Windows
+py -c "import urllib.request; exec(urllib.request.urlopen('https://raw.githubusercontent.com/SubramanyaJ/reid/master/install.py', timeout=30).read())"
+```
+
+```bash
+# Linux
+python3 -c 'import urllib.request; exec(urllib.request.urlopen("https://raw.githubusercontent.com/SubramanyaJ/reid/master/install.py", timeout=30).read())'
+```
+
+The installer creates `~/reid` by default (`reid` in your user home); append `--directory "path/to/reid"` to choose another location. Rerunning the command reuses an installer-created directory without updating the source or replacing its keys, configuration, or database. An existing unrelated directory is refused. After installation, use its directory for the project commands below. For an existing checkout, run `py scripts/setup_node.py` on Windows or `python3 scripts/setup_node.py` on Linux from that checkout's root instead.
+
+The setup script creates or reuses a local `.venv`, installs and checks dependencies, and guides enrollment. Enter this machine's ID, the complete node list, identical reachable runtime URLs for all peers, a local camera index/stream or `none`, FPS, and the same enrollment code on every machine. The code must have at least 16 characters; a blank entry generates one to enter on the other machines. Run setup on all machines while they exchange identities. Every private key is generated and retained only on its own machine; only authenticated public identity information is exchanged.
+
+Allow the runtime TCP port and runtime port + 1 between hosts on the trusted LAN: normally **9000 and 9001**. The second port is temporary for setup. Compare the displayed topology hashes and final membership fingerprints across machines. Keep every setup window open until **all machines show the same ready membership fingerprint**, then press Enter on each machine. Setup reports per-peer progress and waits up to 600 seconds by default; `--timeout 1200` extends this. If interrupted or timed out, rerun the script to reuse the saved identity and settings. A completed node can choose to reopen exchange to help an interrupted peer finish.
+
+Successful setup offers foreground startup by default. On a later run, choose to start using the saved configuration, reopen exchange, or exit. No central provisioning machine or saved enrollment code is required for normal startup. The setup files are under `config/node/`, each local private key is `config/node/keys/<node>.pem`, and the runtime configuration is `config/node/<node>.yaml`. The local database is `data/enrolled/<node>/state.sqlite`. Preserve them on their owning machine. Do not copy `.venv` or private keys between hosts.
+
+Before enrollment finishes, a rerun also offers to correct the network/camera settings without changing the local private key. After enrollment, preserve the fixed membership and use a separate setup directory for a new deployment.
+
+### Start and stop independently
+
+Rerun the setup script and select startup, or run the local configuration directly:
+
+```powershell
+# Windows, C1 example
+.\.venv\Scripts\python.exe -m reid run --config config/node/C1.yaml
+```
+
+```bash
+# Linux, C2 example
+.venv/bin/python -m reid run --config config/node/C2.yaml
+```
+
+Use the ID assigned to that machine. Open its configured runtime URL in a browser for the monitor. Press Ctrl+C in its terminal to stop gracefully. Each peer keeps its own ledger, gallery, and run reports beside its database. For example, C1 writes `data/enrolled/C1/metrics_live.json` and preserved reports, observations, and label templates in `data/enrolled/C1/runs/<run-id>/`.
+
+| Symptom | Check |
+|---|---|
+| Dependency installation fails | Python 3.10+, available internet/package index, and the installation error displayed by the script; retry after fixing it. |
+| Setup keeps waiting for a peer | That peer is running setup, has the same node list, URLs, and code, and its runtime port + 1 is reachable. |
+| Topology hashes differ | Use the same full node list and reachable URLs on every machine. |
+| One peer finished but another timed out | Reopen exchange on the completed peer and retry on the interrupted peer. |
+| Peer starts but camera is disconnected | Check the local camera source, permissions, or device ownership; `none` is valid. |
+| Runtime peers are unavailable | Check the runtime port, LAN routes, and configured member URLs. |
+| Port is occupied | Stop another runtime/setup instance using that port before retrying. |
+
+For labeled evaluation, follow [Obtain actual live Re-ID accuracy](#obtain-actual-live-re-id-accuracy) below, substituting the new `data/enrolled/` paths. Membership is fixed for a ledger: changed addresses or keys require a new consortium/database. New enrollment does not rotate keys in the historical deployment below. See the [full setup guide](docs/setup.md) for enrollment files and configuration details.
+
 ## Run the existing three-node LAN setup
 
-Use this section for the machines already configured in this project. **Do not run `reid init` again.** The [provisioning guide](docs/setup.md) is for a new, separate installation.
+This section preserves the historical `config/lan/` deployment and its SSH-based controller. The new per-machine setup above uses separate configurations and databases. **Do not run `reid init` again or replace these existing keys.** `reid init` now supports loopback-only demonstrations; new multi-machine enrollment uses the setup script.
 
 | Node | Machine and project root | Config on that machine | Monitor |
 |---|---|---|---|
@@ -12,7 +64,7 @@ Use this section for the machines already configured in this project. **Do not r
 | C2 | `sub@10.78.223.1`: `/home/sub/reid` | `config/lan/C2.yaml` | http://10.78.223.1:9000 |
 | C3 | `sub@10.78.223.84`: `/home/sub/reid` | `config/lan/C3.yaml` | http://10.78.223.84:9000 |
 
-The configured C1 address is **10.78.223.22**. The older `10.78.233.22` address was a typo. Each machine uses port **9000**; ports 9001/9002 belong to the separate single-machine smoke setup.
+The configured C1 address is **10.78.223.22**. The older `10.78.233.22` address was a typo. Each historical machine uses runtime port **9000**. The separate single-machine demo uses runtime ports 9000/9001/9002; new per-machine enrollment temporarily uses runtime port + 1 for setup.
 
 ### 1. Before starting
 

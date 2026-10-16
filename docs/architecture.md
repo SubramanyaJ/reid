@@ -175,6 +175,14 @@ Gallery state contains `global_id`, `visual_gallery`, `plate_history`, `camera_h
 
 ## Provenance, storage, and consensus
 
+### Local identities and peer enrollment
+
+`scripts/setup_node.py` prepares a virtual environment on each machine and runs the interactive `reid setup` command. Each node generates its own Ed25519 private key locally; the setup protocol exchanges public identities only. There is no central key generator or permanent enrollment coordinator. A shared enrollment code authenticates enrollment messages, and each public identity is signed by its own private key. The code is used in memory and is not saved in the setup files.
+
+All participants enter the same fixed set of node IDs and reachable runtime URLs. Setup displays a topology hash, exchanges authenticated identities over a temporary HTTP service at each runtime port plus one, and displays a membership fingerprint once complete. Only the normalized public membership records enter the generated runtime configuration. Temporary setup metadata does not change the ledger format. The completed public membership must agree on every machine, because IDs, public keys, and URL strings determine genesis.
+
+The default local setup directory is `config/node/`: `setup.json` retains retry settings, `keys/<node>.pem` holds only the local private key, `public.json` exports public identity information, and `<node>.yaml` configures the local runtime. The database is separate at `data/enrolled/<node>/state.sqlite`. Interrupted setup can be retried using the same identity. An enrolled node can reopen exchange to help an interrupted peer or start independently without repeating enrollment. This flow creates a separate consortium from any historical `config/lan/` deployment; it does not rotate keys in an existing chain.
+
 ### Signed events and off-ledger state
 
 Each accepted identity observation produces an Ed25519-signed transaction. Event fields include event UUID, timestamp, node/camera/local/global IDs, the four evidence scores, decision, confidence, crop/mask observation hash, feature hash, plate-state hash, sidecar payload hash, and descriptor profile hash.

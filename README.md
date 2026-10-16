@@ -4,26 +4,30 @@ A Python application for identifying objects across stationary cameras using cla
 
 There are no trained models or model downloads. Detection finds moving foreground objects; it does not classify vehicles. Recognition accuracy requires independently labeled data.
 
-## Install
+## Set up each machine
 
-Use Python 3.10 or newer. From the repository root:
+Install Python 3.10 or newer, then run the matching command on **each machine**. Git is not required:
 
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.\.venv\Scripts\python.exe -m reid --help
+# Windows
+py -c "import urllib.request; exec(urllib.request.urlopen('https://raw.githubusercontent.com/SubramanyaJ/reid/master/install.py', timeout=30).read())"
 ```
 
 On Linux:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[dev]'
-python -m reid --help
+python3 -c 'import urllib.request; exec(urllib.request.urlopen("https://raw.githubusercontent.com/SubramanyaJ/reid/master/install.py", timeout=30).read())'
 ```
 
-The `dev` extra adds pytest. `pip install -r requirements.txt` installs the same editable development environment. No frontend build is needed. See [setup](docs/setup.md) for system dependencies and camera configuration.
+The installer downloads [SubramanyaJ/reid](https://github.com/SubramanyaJ/reid) into `~/reid` (`reid` in your user home), creates a local `.venv`, installs the runtime dependencies, and opens interactive setup. It reports each stage and asks for the local node ID, full peer list and reachable addresses, camera source, and FPS. Use the same peer list and enrollment code on every machine. Allow the runtime port (normally 9000) and temporary setup port (normally 9001) between the machines.
+
+Rerun the same command for later starts. It reuses an installer-created directory and preserves its keys, configuration, and database; it does not update the application automatically. Add `--directory "path/to/reid"` to choose another location. An existing unrelated directory is refused. After installation, run other commands below from that installation directory.
+
+If you already have a checkout, run `py scripts/setup_node.py` on Windows or `python3 scripts/setup_node.py` on Linux from its root instead.
+
+Every machine generates and keeps **its own private key**. Equal peers exchange authenticated public identities; no machine generates or distributes another machine's private key. The enrollment code stays in memory. Once enrolled, each machine can start independently using its saved configuration. Rerunning the script reuses its identity and offers startup, resuming public-key exchange, or exit.
+
+See [setup](docs/setup.md) for the step-by-step procedure, output files, retry behavior, and manual installation. Do not copy `.venv` between machines. No frontend build is needed.
 
 ## Process a video
 
@@ -37,16 +41,22 @@ See [video replay and review](docs/video.md) for timing, output files, and the l
 
 ## Run camera peers
 
-For the configured C1/C2/C3 machines, follow the [LAN runbook](LAN-RUNBOOK.md). It covers startup, shutdown, logs, and collecting labeled observations.
+For a new multi-machine deployment, run the setup script above on every machine. When setup offers to launch, accept to run that node in the foreground. Later, rerun the script or use its generated configuration directly:
 
-For a **new** local deployment:
+```powershell
+.\.venv\Scripts\python.exe -m reid run --config config/node/C1.yaml
+```
+
+Use the local node ID in place of C1; Linux uses `.venv/bin/python`. See the [LAN runbook](LAN-RUNBOOK.md) for independent startup, shutdown, and the separately retained historical LAN deployment.
+
+For a **single-machine smoke check** only:
 
 ```bash
 python -m reid init --nodes C1 C2 C3 --out config/local
 python -m reid run --config config/local/C1.yaml
 ```
 
-Run C2 and C3 in separate terminals with their configs. Configure each camera source before starting. Full provisioning instructions are in [setup](docs/setup.md).
+Run C2 and C3 in separate terminals with their configs. `reid init` creates all demo identities locally and accepts loopback hosts only; use the interactive setup for different machines. Configure each camera source before starting.
 
 ## Project map
 
@@ -66,6 +76,12 @@ Run C2 and C3 in separate terminals with their configs. Configure each camera so
 The [architecture reference](docs/architecture.md) describes algorithms, boundaries, and limitations. [Evaluation and paper reproduction](docs/evaluation.md) covers benchmarks, labels, network checks, and manuscript builds. The [research suite guide](experiments/RESEARCH.md) documents crop/frame manifests and metrics. Earlier project instructions and delivery notes are retained under `docs/history/`.
 
 ## Develop and clean
+
+Install the development extra in this machine's environment to add pytest:
+
+```bash
+python -m pip install -e '.[dev]'
+```
 
 ```bash
 python -B -m pytest -q -p no:cacheprovider

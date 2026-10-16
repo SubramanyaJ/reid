@@ -1,23 +1,54 @@
 # Installation and configuration
 
-[Project overview](../README.md) · Run commands from the repository root.
+[Project overview](../README.md) · After installation, run project commands from the installation directory.
 
-## Installation
+## Interactive setup on each machine
 
-Use Python 3.10 or newer; Python 3.11/3.12 is a sensible starting environment. OpenCV, NumPy, SciPy, Matplotlib, cryptography, FastAPI, HTTPX, Uvicorn, PyYAML, and pytest are installed through `requirements.txt` and the editable package definition in `pyproject.toml`. A Python virtual environment is local to each laptop. There is no Node.js/frontend build step.
+Use Python 3.10 or newer. Run the matching command on every machine to download [SubramanyaJ/reid](https://github.com/SubramanyaJ/reid) and open interactive setup. Git is not required:
 
-### Linux
-
-Run from a clone/copy of this repository; change the first path if your checkout differs.
+```powershell
+# Windows PowerShell
+py -c "import urllib.request; exec(urllib.request.urlopen('https://raw.githubusercontent.com/SubramanyaJ/reid/master/install.py', timeout=30).read())"
+```
 
 ```bash
-cd ~/reid
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m reid --help
+# Linux
+python3 -c 'import urllib.request; exec(urllib.request.urlopen("https://raw.githubusercontent.com/SubramanyaJ/reid/master/install.py", timeout=30).read())'
 ```
+
+The installer uses Python's standard library to download the repository archive into `~/reid` (`reid` in your user home), then runs `scripts/setup_node.py` there. The setup launcher creates or reuses `.venv`, installs the application and its runtime dependencies, verifies imports, and starts `python -m reid setup` using that environment. Both scripts display progress and errors, including dependency-installation output. First installation needs internet access. Use the same application revision on all peers.
+
+Rerunning the one-line command reuses a directory created by this installer and retains the local private key, configuration, database, and source files. It does not download an application update automatically. An existing directory not created by the installer is refused; run its existing setup script or choose a different installation directory. Add `--directory` after the bootstrap command to choose a location, for example:
+
+```powershell
+py -c "import urllib.request; exec(urllib.request.urlopen('https://raw.githubusercontent.com/SubramanyaJ/reid/master/install.py', timeout=30).read())" --directory "$env:USERPROFILE\reid-node" --timeout 1200
+```
+
+The bootstrap accepts `--help` and forwards setup options such as `--timeout 1200` and `--skip-install`. These arguments work on Linux too. After installation, change into the displayed installation directory before running project commands directly. The default is `~/reid` on both platforms.
+
+### Use an existing checkout instead
+
+If you already copied or cloned the repository, run the local launcher from its root:
+
+```powershell
+# Windows PowerShell
+py scripts/setup_node.py
+```
+
+```bash
+# Linux
+python3 scripts/setup_node.py
+```
+
+To clone explicitly, use `git clone https://github.com/SubramanyaJ/reid.git`, enter the resulting `reid` directory, and run the local launcher above. `python scripts/setup_node.py` also works when `python` selects a supported interpreter. A failed dependency installation can be fixed and retried with the same command.
+
+An environment that has already been installed can be checked and reused without pip or network access:
+
+```text
+python scripts/setup_node.py --skip-install
+```
+
+The wrapper refuses `--skip-install` when the environment is missing, incomplete, or belongs to a different checkout. Do not copy `.venv` from another machine or operating system. There is no Node.js/frontend build step.
 
 On Debian/Ubuntu systems missing venv or OpenCV shared libraries, install the applicable system packages first:
 
@@ -26,33 +57,97 @@ sudo apt-get update
 sudo apt-get install python3-venv libgl1 libglib2.0-0
 ```
 
-### Windows PowerShell
+### What to enter
 
-The project root for this checkout is `E:\home\gitthings\reid`.
+Run setup on all machines during enrollment. Every machine performs the same role; there is no main provisioning computer. For a three-machine example:
+
+| Prompt | C1 machine | C2 machine | C3 machine |
+|---|---|---|---|
+| Local node ID | `C1` | `C2` | `C3` |
+| Full node list | `C1 C2 C3` | `C1 C2 C3` | `C1 C2 C3` |
+| C1 runtime URL | `http://192.168.1.101:9000` | same | same |
+| C2 runtime URL | `http://192.168.1.102:9000` | same | same |
+| C3 runtime URL | `http://192.168.1.103:9000` | same | same |
+| Camera | local device index or stream | local device index or stream | `none` if camera-less |
+| Enrollment code | one shared code | the same code | the same code |
+
+Substitute the actual IP addresses or resolvable hostnames. The node list defaults to `C1 C2 C3`, and the runtime port normally is 9000. Each URL must reach the correct machine from every other machine. `0.0.0.0` is a listening bind address, not a reachable peer URL. Do not use `localhost` for another machine.
+
+Choose a local integer camera index such as `0`, a stream URL such as `rtsp://192.168.1.120:554/stream1`, or `none`. Setup also asks for FPS. A camera-less node still participates fully in synchronization and consensus. See [Configuration and cameras](#configuration-and-cameras) for the vision settings and source examples.
+
+The shared enrollment code must have at least 16 characters. Leaving it blank generates a code to enter on the other machines. Enter the same code at all peers; keep it within the deployment group. It is used in memory to authenticate enrollment messages and is not saved. Each node independently generates and retains its own Ed25519 private key. The exchange sends signed **public identity information only**. There is no step that sends or copies private keys between machines.
+
+### Network exchange and progress
+
+Allow the runtime TCP port and the temporary setup TCP port between these machines on the trusted LAN. Setup uses **runtime port + 1** on each machine: with runtime 9000, allow **9000 and 9001**. Ensure both are free before starting. Do not assign another node's runtime to a setup port when running several nodes on one host.
+
+Setup displays the topology hash, local identity information, and periodic status for each peer while it waits. Compare the topology hash across machines; differences mean that the entered node lists or URLs differ. Authenticated public identities are collected from every expected peer before the local runtime configuration is completed. Keep every setup window open until **all machines display the same ready membership fingerprint**, then press Enter on each machine. The listener remains available while this prompt is open so peers can retry interrupted replies.
+
+The default exchange timeout is 600 seconds. Extend it when machines take longer to start:
+
+```text
+python scripts/setup_node.py --timeout 1200
+```
+
+Timeout and Ctrl+C preserve the local identity and saved setup settings. Rerun the same command to retry. If one node completed while another was interrupted, rerun setup on the completed node and choose to reopen exchange so the interrupted node can collect its public identity. The completed node reuses its existing key and configuration. Rerunning an enrolled setup offers startup, reopening exchange, or exit.
+
+An unfinished setup offers retry, correction of network/camera settings, or exit. Use correction to fix a mistyped peer address or camera choice while keeping the same local private key. Once enrollment has produced a configuration, its membership is fixed; changing the consortium requires a separate setup directory, for example `--out config/new-deployment`. A custom setup directory gets a separate database directory under `data/enrolled/`.
+
+The launcher offers to start the peer in the foreground after successful enrollment, with **yes** as the default. Open the displayed monitor address. Camera nodes need the configured background warmup; a camera-less node can be healthy with no frame. Press Ctrl+C in that terminal for graceful shutdown and final metric export.
+
+### Files and later independent startup
+
+The default outputs on each machine are:
+
+| File | Purpose |
+|---|---|
+| `config/node/setup.json` | This machine's saved enrollment settings for retries |
+| `config/node/keys/<node>.pem` | This machine's private key; keep it only on its owner |
+| `config/node/public.json` | Public identity export for inspection |
+| `config/node/<node>.yaml` | Local runtime configuration, including every public member |
+| `data/enrolled/<node>/state.sqlite` | Local runtime database, created when the peer starts |
+
+Keep generated setup files and private keys out of Git. Preserve the local key, configuration, and database across restarts. Setup reuses them instead of replacing the node's identity. Do not copy another node's private key or database onto this machine.
+
+Once enrolled, each machine can restart independently with the script's startup option, or directly with its own configuration:
 
 ```powershell
-Set-Location E:\home\gitthings\reid
+# Windows, C1 example
+.\.venv\Scripts\python.exe -m reid run --config config/node/C1.yaml
+```
+
+```bash
+# Linux, C2 example
+.venv/bin/python -m reid run --config config/node/C2.yaml
+```
+
+The enrollment code and temporary exchange service are not needed for normal restarts. Every peer keeps its own public membership list; no key-distribution machine has to stay online. Runtime consensus still depends on the scheduled proposer and a majority being available. Do not run multiple peer processes or Uvicorn workers against one node database.
+
+**Membership is fixed for one chain.** IDs, public keys, and URL strings define genesis and must agree exactly on every machine. A changed membership or address requires a new consortium/database in this MVP. New enrollment uses `config/node/` and `data/enrolled/` separately from the historical `config/lan/` deployment; it does not rotate that deployment's keys in place. Preserve the old keys and ledger if its history must be retained. Do not delete only one peer's votes while keeping the rest of its identity/ledger in service: durable votes are part of consensus safety.
+
+Peer HTTP endpoints and the monitoring UI assume a trusted LAN. Events, proposals, and votes are cryptographically authenticated, but HTTP transport, camera previews, feature packets, and status endpoints are not access-controlled or encrypted by this application. Status responses are advisory; signatures and certificates establish acceptance. Use an isolated lab network, VPN, or externally managed authenticated TLS proxy for the intended deployment. Never treat a member's signature as proof that its reported identity is physically correct.
+
+## Manual installation and local smoke check
+
+If an environment is already managed manually, installation remains available:
+
+```powershell
+# Windows; activation is optional
 py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m reid --help
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m reid setup
 ```
 
-If local policy blocks activation, invoke the environment directly; activation is not required:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m reid --help
+```bash
+# Linux
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]'
+.venv/bin/python -m reid setup
 ```
 
-Do not run multiple Uvicorn workers against one node database. The CLI explicitly uses one worker. To stop a node, press Ctrl+C in its terminal.
+The `dev` extra adds pytest; `pip install -r requirements.txt` installs the same editable development environment. Runtime dependencies are OpenCV, NumPy, SciPy, Matplotlib, cryptography, FastAPI, HTTPX, Uvicorn, and PyYAML.
 
-## Provisioning a new deployment (skip for the existing LAN)
-
-### Three local peers for a first smoke check
-
-The following command is identical on Linux and Windows after activating the environment:
+For three peers **on one machine**, the local demo command remains:
 
 ```text
 python -m reid init --nodes C1 C2 C3 --out config/local
@@ -60,7 +155,7 @@ python -m reid init --nodes C1 C2 C3 --out config/local
 
 This creates `config/local/C1.yaml`, `C2.yaml`, `C3.yaml`, and three private key files under `config/local/keys/`. Each configuration includes the complete public membership list. Local addresses are `127.0.0.1:9000`, `:9001`, and `:9002`. Each node gets its own SQLite database under `data/<node>/`. All cameras initially have `source: null`.
 
-The command refuses to overwrite an existing configuration/key. Use a different output directory when constructing a separate consortium. Node names are configurable; the three names are an example, not a protocol limit. A single-node consortium is also supported and has quorum one.
+This local-only helper creates all demo keys in one place and rejects remote `--hosts` addresses. For different machines, use the independent setup flow above. It refuses to overwrite an existing configuration/key. Node names are configurable; a single-node consortium is also supported and has quorum one.
 
 Open three terminals, activate the environment in each, and run one command per terminal:
 
@@ -78,31 +173,9 @@ Open the local monitors:
 
 With no camera and no events, a healthy chain remains at genesis (height zero). Nodes do not generate empty blocks to animate the UI. Configure cameras to produce real observations, or run the [independent offline demonstration](evaluation.md#offline-synthetic-demonstration).
 
-### New LAN deployment on different machines
-
-Provision this example **once**, with the actual laptop IP addresses substituted, then distribute the resulting files:
-
-```text
-python -m reid init --nodes C1 C2 C3 --hosts 192.168.1.101 192.168.1.102 192.168.1.103 --port 9000 --out config/lan
-```
-
-When hostnames/IPs differ, each uses TCP port 9000. Repeated hosts receive successive ports. Copy the repository to every laptop. Place the generated `C1.yaml` and `keys/C1.pem` on laptop 1, `C2.yaml` and `keys/C2.pem` on laptop 2, and the corresponding C3 files on laptop 3, preserving the `config/lan/` layout. Each node configuration includes **all public** members, but each laptop needs only its own private key. Keep the provisioning key copies securely or remove them manually after securely transferring ownership; do not check private keys into Git.
-
-On laptop 1, run:
-
-```text
-python -m reid run --config config/lan/C1.yaml
-```
-
-Use the corresponding C2/C3 config on the other laptops. Allow the configured TCP port through each host firewall for the trusted peer network. `node.host` is the listening bind address; each `members[].url` is the reachable peer address. `0.0.0.0` is a bind address, not a peer URL.
-
-**Membership is fixed for one chain.** Every node must use exactly the same member IDs, public keys, and URL strings, because those values define genesis. Changing membership or addresses requires a new consortium/database in this MVP; there is no membership reconfiguration protocol. Do not delete only one peer's votes while keeping the rest of its identity/ledger in service: durable votes are part of consensus safety.
-
-Peer HTTP endpoints and the monitoring UI assume a trusted LAN. Events, proposals, and votes are cryptographically authenticated, but HTTP transport, camera previews, feature packets, and status endpoints are not access-controlled or encrypted by this application. Status responses are advisory; signatures and certificates establish acceptance. Use an isolated lab network, VPN, or externally managed authenticated TLS proxy for the intended deployment. Never treat a member's signature as proof that its reported identity is physically correct.
-
 ## Configuration and cameras
 
-Edit the generated node YAML. `config/config.yaml` is an annotated template, not a ready-to-run provisioned identity; its membership is intentionally empty. Paths in YAML resolve relative to that YAML file, making a copied `config/local/` or `config/lan/` layout portable. Feature weights and descriptor profile must agree across peers. Changing a descriptor profile in an existing database is rejected to prevent incompatible galleries.
+Edit the generated local node YAML for additional camera or vision settings. `config/config.yaml` is an annotated template, not a ready-to-run provisioned identity; its membership is intentionally empty. Paths in YAML resolve relative to that YAML file. Feature weights and descriptor profile must agree across peers. Changing a descriptor profile in an existing database is rejected to prevent incompatible galleries.
 
 Example camera configuration:
 

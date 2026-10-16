@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import os
 from pathlib import Path
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
@@ -47,7 +48,8 @@ def save_private(path, key):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     # Exclusive creation avoids accidentally replacing a consortium identity.
-    with path.open("xb") as stream:
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as stream:
         stream.write(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
                                        serialization.NoEncryption()))
     path.chmod(0o600)

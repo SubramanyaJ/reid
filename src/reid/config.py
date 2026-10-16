@@ -93,7 +93,7 @@ def load_config(path):
     if any(not isinstance(node, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", node) for node in ids):
         raise ValueError("Invalid member ID")
     if not members or len(set(ids)) != len(ids) or cfg["node"]["id"] not in ids:
-        raise ValueError("Membership must be unique and include this node. Run the init command first.")
+        raise ValueError("Membership must be unique and include this node. Run setup on each machine (init is for local demos).")
     if len({m["public_key"] for m in members}) != len(members):
         raise ValueError("Each member needs a distinct public key")
     if len({m["url"] for m in members}) != len(members):

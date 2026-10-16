@@ -1,5 +1,6 @@
 """CLI actions with lazy imports so each command loads only its dependencies."""
 from copy import deepcopy
+import ipaddress
 import os
 from pathlib import Path
 import re
@@ -9,6 +10,17 @@ from .config import DEFAULTS, load_config
 from .provenance.crypto import public_text, save_private
 
 
+def setup_node(args):
+    from .setup import run_setup
+    try:
+        run_setup(args)
+    except KeyboardInterrupt:
+        print("\n[stopped] Setup interrupted. Saved identity/state are preserved; rerun the script to continue.")
+        raise SystemExit(130) from None
+    except EOFError:
+        raise ValueError("Setup requires an interactive terminal. Rerun scripts/setup_node.py in a terminal.") from None
+
+
 def initialize(args):
     names = args.nodes
     if len(set(names)) != len(names) or any(not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", name) for name in names):
@@ -16,6 +28,14 @@ def initialize(args):
     hosts = args.hosts or ["127.0.0.1"] * len(names)
     if len(hosts) != len(names):
         raise ValueError("Provide one --hosts value per node")
+    for host in hosts:
+        try:
+            loopback = ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            loopback = host.lower() == "localhost"
+        if not loopback:
+            raise ValueError("init is for loopback-only demos. Run python scripts/setup_node.py on EACH machine "
+                             "so private keys are generated locally and never distributed.")
     if not 1024 <= args.port <= 65535 - len(names):
         raise ValueError("Choose an unprivileged TCP base port with room for all peers")
     out = Path(args.out).resolve()
@@ -27,7 +47,7 @@ def initialize(args):
     for host in hosts:
         ports.append(args.port + seen_hosts.get(host, 0))
         seen_hosts[host] = seen_hosts.get(host, 0) + 1
-    members = [{"id": name, "url": f"http://{host}:{port}", "public_key": public_text(keys[name].public_key())}
+    members = [{"id": name, "url": f"http://{'[' + host + ']' if ':' in host else host}:{port}", "public_key": public_text(keys[name].public_key())}
                for name, host, port in zip(names, hosts, ports)]
     out.mkdir(parents=True, exist_ok=True)
     for name, port in zip(names, ports):
